@@ -69,7 +69,10 @@ def find_high_correlation_pairs(
                     "cramers_v": round(v, 4),
                 })
 
-    pairs_df = pd.DataFrame(pairs).sort_values("cramers_v", ascending=False).reset_index(drop=True)
+    if pairs:
+        pairs_df = pd.DataFrame(pairs).sort_values("cramers_v", ascending=False).reset_index(drop=True)
+    else:
+        pairs_df = pd.DataFrame(columns=["feature_a", "feature_b", "cramers_v"])
     print(f"High-correlation pairs (V >= {threshold}): {len(pairs_df)}")
     return pairs_df
 
