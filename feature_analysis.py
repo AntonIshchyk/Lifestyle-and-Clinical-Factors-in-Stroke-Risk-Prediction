@@ -2,18 +2,6 @@ import numpy as np
 import pandas as pd
 from scipy.stats import chi2_contingency
 
-# Recode refused / don't know / missing to NaN
-# 7, 77, 777 = don't know, 9, 99, 999 = refused
-# These are not real values and must be removed before any correlation analysis.
-
-SKIP_CODES = [7, 9, 77, 99, 777, 999, 7777, 9999]
-
-def recode_skip_codes(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    for col in df.select_dtypes(include=[np.float64, np.int64]).columns:
-        df[col] = df[col].replace(SKIP_CODES, np.nan)
-    return df
-
 # Bias-corrected Cramér's V between two categorical series
 def cramers_v(x: pd.Series, y: pd.Series) -> float:
     mask = x.notna() & y.notna()
@@ -42,12 +30,12 @@ def find_high_correlation_pairs(
     sample_n: int = 50_000,
     random_state: int = 42,
 ) -> pd.DataFrame:
-    df_clean = recode_skip_codes(df)
+    df = df.copy()
 
-    if sample_n and len(df_clean) > sample_n:
-        df_clean = df_clean.sample(n=sample_n, random_state=random_state)
+    if sample_n and len(df) > sample_n:
+        df = df.sample(n=sample_n, random_state=random_state)
 
-    feature_cols = list(df_clean.columns)
+    feature_cols = list(df.columns)
     n = len(feature_cols)
 
     print(f"Computing Cramér's V for {n} features ({n * (n - 1) // 2:,} pairs)...")
@@ -57,8 +45,8 @@ def find_high_correlation_pairs(
         for j in range(i + 1, n):
             try:
                 v = cramers_v(
-                    df_clean[feature_cols[i]].astype("category"),
-                    df_clean[feature_cols[j]].astype("category"),
+                    df[feature_cols[i]].astype("category"),
+                    df[feature_cols[j]].astype("category"),
                 )
             except Exception:
                 v = np.nan
