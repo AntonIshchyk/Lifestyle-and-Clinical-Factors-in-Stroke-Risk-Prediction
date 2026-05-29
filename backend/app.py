@@ -95,7 +95,7 @@ def ensure_database():
 
 def display_value(value):
     if value is None or pd.isna(value):
-        return ""
+        return "-"
     if isinstance(value, float):
         if value.is_integer():
             return str(int(value))
@@ -103,30 +103,22 @@ def display_value(value):
     return str(value)
 
 
-def get_patients(page, per_page, search):
+def get_patients(page, per_page):
     offset = (page - 1) * per_page
-    where = ""
-    params = []
-
-    if search:
-        where = f'WHERE CAST("{PATIENT_ID_COLUMN}" AS TEXT) LIKE ?'
-        params.append(f"%{search}%")
 
     with get_connection() as connection:
         columns = get_columns(connection)
         total = connection.execute(
-            f'SELECT COUNT(*) FROM "{PATIENTS_TABLE}" {where}',
-            params,
+            f'SELECT COUNT(*) FROM "{PATIENTS_TABLE}"'
         ).fetchone()[0]
         rows = connection.execute(
             f'''
             SELECT *
             FROM "{PATIENTS_TABLE}"
-            {where}
             ORDER BY "{PATIENT_ID_COLUMN}"
             LIMIT ? OFFSET ?
             ''',
-            [*params, per_page, offset],
+            [per_page, offset],
         ).fetchall()
 
     patients = [
@@ -140,12 +132,11 @@ def get_patients(page, per_page, search):
 def api_patients():
     page = request.args.get("page", default=1, type=int)
     per_page = request.args.get("per_page", default=10, type=int)
-    search = request.args.get("search", default="", type=str).strip()
 
     page = max(page, 1)
     per_page = min(max(per_page, 1), 100)
 
-    columns, patients, total = get_patients(page, per_page, search)
+    columns, patients, total = get_patients(page, per_page)
     return jsonify(
         {
             "columns": columns,

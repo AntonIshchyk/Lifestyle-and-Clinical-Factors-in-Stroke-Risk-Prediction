@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useState, type ChangeEvent } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Link from '@mui/material/Link'
@@ -18,21 +18,16 @@ type PatientsResponse = {
 }
 
 function HomePage() {
-  const [searchInput, setSearchInput] = useState('')
-  const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
+  
   const query = useQuery({
-    queryKey: ['patients', page, perPage, search],
+    queryKey: ['patients', page, perPage],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
         per_page: String(perPage),
       })
-
-      if (search) {
-        params.set('search', search)
-      }
 
       const response = await fetch(`/api/patients?${params.toString()}`)
 
@@ -70,21 +65,9 @@ function HomePage() {
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1
 
-  const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setPage(1)
-    setSearch(searchInput.trim())
-  }
-
   const handleRowsChange = (event: ChangeEvent<HTMLInputElement>) => {
     setPage(1)
     setPerPage(Number(event.target.value))
-  }
-
-  const clearSearch = () => {
-    setSearchInput('')
-    setSearch('')
-    setPage(1)
   }
 
   return (
@@ -104,24 +87,8 @@ function HomePage() {
         >
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
             <Box
-              component="form"
-              onSubmit={handleSearchSubmit}
               sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}
             >
-              <TextField
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                label="Patient ID filter"
-                placeholder="Type an ID fragment"
-                size="small"
-                sx={{ width: { xs: '100%', sm: 320 } }}
-              />
-              <Button variant="contained" type="submit" sx={{ px: 3 }}>
-                Search
-              </Button>
-              <Button variant="outlined" type="button" onClick={clearSearch}>
-                Reset
-              </Button>
               <TextField
                 select
                 label="Rows"
