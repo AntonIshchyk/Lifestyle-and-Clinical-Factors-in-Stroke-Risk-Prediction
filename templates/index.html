@@ -4,9 +4,65 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lifestyle and Clinical Factors in Stroke Risk Prediction</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
-    <h1>Lifestyle and Clinical Factors in Stroke Risk Prediction</h1>
-    <!-- Content to be implemented -->
+    <main>
+        <header>
+            <div>
+                <h1>Stroke Risk Patient Table</h1>
+                <p>
+                    {{ "{:,}".format(total) }} clean_df patient records
+                    {% if has_model %}with model results{% else %}ready for model results{% endif %}.
+                </p>
+            </div>
+            <form method="get" action="/">
+                <input type="search" name="search" value="{{ search }}" placeholder="Search patient ID">
+                <select name="per_page" aria-label="Rows per page">
+                    {% for option in [10, 25, 50, 100] %}
+                        <option value="{{ option }}" {% if option == per_page %}selected{% endif %}>{{ option }} rows</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Apply</button>
+            </form>
+        </header>
+
+        <div class="toolbar">
+            <p>Page {{ page }} of {{ total_pages }}</p>
+            <p>{{ columns|length }} dynamic columns from SQLite</p>
+        </div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        {% for column in columns %}
+                            <th scope="col">{{ column }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for patient in patients %}
+                        <tr>
+                            {% for column in columns %}
+                                <td>{{ patient[column] }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="{{ columns|length }}">No matching patients found.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <nav class="pager" aria-label="Pagination">
+            {% set previous_page = page - 1 %}
+            {% set next_page = page + 1 %}
+            <a class="button secondary {% if page <= 1 %}disabled{% endif %}" href="/?page={{ previous_page }}&per_page={{ per_page }}&search={{ search }}">Previous</a>
+            <a class="button secondary {% if page >= total_pages %}disabled{% endif %}" href="/?page={{ next_page }}&per_page={{ per_page }}&search={{ search }}">Next</a>
+        </nav>
+    </main>
 </body>
 </html>
