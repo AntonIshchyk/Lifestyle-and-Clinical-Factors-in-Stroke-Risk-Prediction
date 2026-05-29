@@ -12,18 +12,32 @@ pip install -r requirements.txt
 
 This will install Flask and any other dependencies listed in `requirements.txt`.
 
-### Run the Application
-
-To start the Flask development server:
+For the frontend, install the React dependencies once:
 
 ```bash
-python app.py
+cd frontend
+npm install
 ```
 
-The application will be available at `http://localhost:5000/`
+### Run the Application
+
+Build the React app first:
+
+```bash
+npm run build
+```
+
+Then start the Flask development server from the project root:
+
+```bash
+python backend/app.py
+```
+
+The Flask app serves the React build at `http://localhost:5000/`.
 
 ## Project Structure
 
-- `app.py` - Flask application with routes
-- `templates/index.html` - HTML templates
+- `backend/app.py` - Flask application and React SPA host
+- `ai_module/main.ipynb`
+- `frontend/` - React + TypeScript + Tailwind app
 - `requirements.txt` - Python dependencies
