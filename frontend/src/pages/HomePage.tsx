@@ -1,4 +1,12 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type ChangeEvent, type FormEvent } from 'react'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Link from '@mui/material/Link'
+import MenuItem from '@mui/material/MenuItem'
+import Paper from '@mui/material/Paper'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
+import { DataGrid, type GridColDef } from '@mui/x-data-grid'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
 type PatientsResponse = {
@@ -9,18 +17,17 @@ type PatientsResponse = {
   total: number
 }
 
-const visibleColumnLimit = 8
-
 function HomePage() {
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [perPage, setPerPage] = useState(10)
   const query = useQuery({
-    queryKey: ['patients', page, search],
+    queryKey: ['patients', page, perPage, search],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
-        per_page: '10',
+        per_page: String(perPage),
       })
 
       if (search) {
@@ -44,13 +51,34 @@ function HomePage() {
   const error = query.isError ? 'Could not load patients from the backend.' : ''
 
   const columns = data?.columns ?? []
-  const visibleColumns = columns.slice(0, visibleColumnLimit)
+  const gridColumns: GridColDef[] = columns.map((column) => ({
+    field: column,
+    headerName: column,
+    flex: 1,
+    minWidth: 160,
+    sortable: true,
+    type: column === 'patient_id' ? 'number' : 'string',
+    align: 'left',
+    headerAlign: 'left',
+    valueGetter: (_, row) => (column === 'patient_id' ? Number(row[column]) : row[column] ?? '—'),
+  }))
+
+  const rows = data?.patients.map((patient) => ({
+    id: patient.patient_id,
+    ...patient,
+  })) ?? []
+
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.per_page)) : 1
 
   const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setPage(1)
     setSearch(searchInput.trim())
+  }
+
+  const handleRowsChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setPage(1)
+    setPerPage(Number(event.target.value))
   }
 
   const clearSearch = () => {
@@ -60,115 +88,172 @@ function HomePage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-8 sm:px-8">
-      <section className="space-y-5">
-        <div>
-          <p className="text-sm font-medium uppercase tracking-[0.25em] text-emerald-600">
-            Patients
-          </p>
-          <h2 className="mt-2 text-3xl font-semibold text-slate-900">Patient explorer</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Live cohort preview from the backend.
-          </p>
-        </div>
-
-        <div className="rounded-3xl border border-emerald-100 bg-emerald-50/40 p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <form className="flex flex-wrap items-center gap-3" onSubmit={handleSearchSubmit}>
-              <input
-                className="h-11 w-72 rounded-full border border-emerald-200 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-emerald-400"
+    <main className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-6 lg:px-8">
+      <Box sx={{ display: 'flex', minHeight: 0, flex: 1, flexDirection: 'column', gap: 2.5 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            flexShrink: 0,
+            px: 2,
+            py: 2,
+            borderRadius: 3,
+            bgcolor: 'background.paper',
+            border: '1px solid',
+            borderColor: 'divider',
+          }}
+        >
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+            <Box
+              component="form"
+              onSubmit={handleSearchSubmit}
+              sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}
+            >
+              <TextField
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Search patient ID"
+                label="Patient ID filter"
+                placeholder="Type an ID fragment"
+                size="small"
+                sx={{ width: { xs: '100%', sm: 320 } }}
               />
-              <button
-                className="h-11 rounded-full bg-emerald-500 px-5 text-sm font-medium text-white transition hover:bg-emerald-600"
-                type="submit"
-              >
+              <Button variant="contained" type="submit" sx={{ px: 3 }}>
                 Search
-              </button>
-              <button
-                className="h-11 rounded-full border border-emerald-200 bg-white px-5 text-sm font-medium text-emerald-900 transition hover:bg-emerald-50"
-                type="button"
-                onClick={clearSearch}
-              >
+              </Button>
+              <Button variant="outlined" type="button" onClick={clearSearch}>
                 Reset
-              </button>
-            </form>
+              </Button>
+              <TextField
+                select
+                label="Rows"
+                value={perPage}
+                onChange={handleRowsChange}
+                size="small"
+                sx={{ minWidth: 120 }}
+              >
+                {[10, 25, 50, 100].map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
 
-            <div className="text-sm text-slate-600">
-                {data ? `${data.total.toLocaleString()} patients` : 'Loading patients...'}
-            </div>
-          </div>
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
+              Study based on:{' '}
+              <Link href="https://www.cdc.gov/brfss/annual_data/annual_2024.html" target="_blank" rel="noreferrer">
+                CDC - 2024 BRFSS Survey Data and Documentation
+              </Link>
+            </Typography>
+          </Box>
+        </Paper>
 
-          <div className="mt-5 overflow-hidden rounded-2xl border border-emerald-100 bg-white">
-            <div className="border-b border-emerald-100 px-4 py-3 text-sm font-medium text-slate-900">
+        <Paper
+          elevation={0}
+          sx={{
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            borderRadius: 3,
+            bgcolor: 'background.paper',
+            border: '1px solid',
+            borderColor: 'divider',
+          }}
+        >
+          <Box sx={{ flexShrink: 0, px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
               {loading ? 'Loading patients...' : 'Patient table'}
-            </div>
+            </Typography>
+          </Box>
 
+          <Box sx={{ width: '100%' }}>
             {error ? (
-              <div className="px-4 py-8 text-sm text-rose-600">{error}</div>
+              <Box sx={{ px: 2, py: 4 }}>
+                <Typography variant="body2" color="error">
+                  {error}
+                </Typography>
+              </Box>
             ) : loading ? (
-              <div className="px-4 py-8 text-sm text-slate-500">Fetching rows from the backend.</div>
+              <Box sx={{ px: 2, py: 4 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Fetching rows from the backend.
+                </Typography>
+              </Box>
             ) : data && data.patients.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-emerald-100 text-left text-sm">
-                  <thead className="bg-emerald-50 text-emerald-900">
-                    <tr>
-                      {visibleColumns.map((column) => (
-                        <th key={column} className="px-4 py-3 font-medium">
-                          {column}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-emerald-50 bg-white text-slate-700">
-                    {data.patients.map((patient) => (
-                      <tr key={patient.patient_id} className="hover:bg-emerald-50/40">
-                        {visibleColumns.map((column) => (
-                          <td key={`${patient.patient_id}-${column}`} className="px-4 py-3">
-                            {patient[column] || '—'}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <Box sx={{ width: '100%' }}>
+                <DataGrid
+                  rows={rows}
+                  columns={gridColumns}
+                  density="compact"
+                  disableRowSelectionOnClick
+                  hideFooter
+                  autoHeight
+                  sx={{
+                    border: 0,
+                    '& .MuiDataGrid-columnHeaders': {
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 1,
+                      bgcolor: 'grey.50',
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                    },
+                    '& .MuiDataGrid-columnHeaderTitle': {
+                      fontWeight: 700,
+                    },
+                    '& .MuiDataGrid-cell': {
+                      whiteSpace: 'nowrap',
+                      py: 0.5,
+                    },
+                    '& .MuiDataGrid-columnHeader': {
+                      px: 1,
+                    },
+                  }}
+                />
+              </Box>
             ) : (
-              <div className="px-4 py-8 text-sm text-slate-500">No patients found.</div>
+              <Box sx={{ px: 2, py: 4 }}>
+                <Typography variant="body2" color="text.secondary">
+                  No patients found.
+                </Typography>
+              </Box>
             )}
-          </div>
+          </Box>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600">
-            <div>
-              {data ? (
-                <>
-                  Showing page {data.page} of {totalPages}
-                </>
-              ) : null}
-            </div>
-            <div className="flex gap-2">
-              <button
-                className="rounded-full border border-emerald-200 bg-white px-4 py-2 font-medium text-emerald-900 disabled:opacity-50"
-                type="button"
-                disabled={page <= 1 || loading}
-                onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
-              >
-                Previous
-              </button>
-              <button
-                className="rounded-full border border-emerald-200 bg-white px-4 py-2 font-medium text-emerald-900 disabled:opacity-50"
-                type="button"
-                disabled={loading || (data ? page >= totalPages : true)}
-                onClick={() => setPage((currentPage) => currentPage + 1)}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
+          <Box
+            sx={{
+              flexShrink: 0,
+              px: 2,
+              py: 1.5,
+              borderTop: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
+              <Typography variant="body2" color="text.secondary">
+                {data ? `Showing page ${data.page} of ${totalPages} • ${perPage} rows per page` : null}
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  type="button"
+                  disabled={page <= 1 || loading}
+                  onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outlined"
+                  type="button"
+                  disabled={loading || (data ? page >= totalPages : true)}
+                  onClick={() => setPage((currentPage) => currentPage + 1)}
+                >
+                  Next
+                </Button>
+              </Box>
+            </Box>
+          </Box>
+        </Paper>
+      </Box>
     </main>
   )
 }

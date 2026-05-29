@@ -13,8 +13,7 @@ function App() {
     ].join(' ')
 
   return (
-    <main className="min-h-screen bg-white text-slate-900">
-      <header className="border-b border-emerald-100 bg-white/85 backdrop-blur">
+    <main className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-4 px-6 py-5 sm:px-8">
           <nav className="flex flex-wrap justify-center gap-3">
             <NavLink to="/" className={linkClass} end>
@@ -28,7 +27,6 @@ function App() {
             </NavLink>
           </nav>
         </div>
-      </header>
 
       <Routes>
         <Route path="/" element={<HomePage />} />

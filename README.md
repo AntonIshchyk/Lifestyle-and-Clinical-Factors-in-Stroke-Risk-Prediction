@@ -24,20 +24,21 @@ npm install
 Build the React app first:
 
 ```bash
+cd frontend
 npm run build
 ```
 
-Then start the Flask development server from the project root:
+Then start the Flask server from the project root:
 
 ```bash
 python backend/app.py
 ```
 
-The Flask app serves the React build at `http://localhost:5000/`.
+Open `http://localhost:5000/` in your browser.
 
 ## Project Structure
 
-- `backend/app.py` - Flask application and React SPA host
+- `backend/app.py` - Flask application and React SPA host on port 5000
 - `ai_module/main.ipynb`
-- `frontend/` - React + TypeScript + Tailwind app
+- `frontend/` - React + TypeScript + Tailwind app used to generate the build served by Flask
 - `requirements.txt` - Python dependencies
