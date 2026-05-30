@@ -1,44 +1,50 @@
-# AI in Healthcare
+# Lifestyle and Clinical Factors in Stroke Risk Prediction
 
-## Setup Instructions
-
-### Install Dependencies
-
-To install all required dependencies, run the following command:
+1. Install Python dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-This will install Flask and any other dependencies listed in `requirements.txt`.
+2. Install project in editable mode (recommended)
 
-For the frontend, install the React dependencies once:
+```bash
+python -m pip install -e .
+```
+
+This makes `backend` and `ai_module` importable from notebooks, scripts, and tests.
+
+3. Run the notebook to generate the datasets and models
+
+Open `ai_module/main.ipynb` in VS Code or Jupyter and run all cells from top to bottom.
+
+4. Install frontend dependencies (once)
 
 ```bash
 cd frontend
 npm install
 ```
 
-### Run the Application
+The frontend is a Vite + React + TypeScript app; Node.js is only needed for installing and building it.
 
-Build the React app first:
+5. Build the frontend
 
 ```bash
-cd frontend
 npm run build
 ```
 
-Then start the Flask server from the project root:
+6. Run the backend
 
 ```bash
+cd ..
 python backend/app.py
 ```
 
-Open `http://localhost:5000/` in your browser.
+Open http://localhost:5000/ to confirm the app is running.
 
-## Project Structure
+## Project structure
 
-- `backend/app.py` - Flask application and React SPA host on port 5000
-- `ai_module/main.ipynb`
-- `frontend/` - React + TypeScript + Tailwind app used to generate the build served by Flask
+- `backend/app.py` - Flask server
+- `ai_module/` - dataset preperation and model training
+- `frontend/` - React + TypeScript frontend
 - `requirements.txt` - Python dependencies
