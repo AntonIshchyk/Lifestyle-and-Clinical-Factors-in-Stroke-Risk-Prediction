@@ -77,47 +77,6 @@ function HomePage() {
           elevation={0}
           sx={{
             flexShrink: 0,
-            px: 2,
-            py: 2,
-            borderRadius: 3,
-            bgcolor: 'background.paper',
-            border: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-            <Box
-              sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}
-            >
-              <TextField
-                select
-                label="Rows"
-                value={perPage}
-                onChange={handleRowsChange}
-                size="small"
-                sx={{ minWidth: 120 }}
-              >
-                {[10, 25, 50, 100].map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-
-            <Typography variant="body2" color="text.secondary" sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
-              Study based on:{' '}
-              <Link href="https://www.cdc.gov/brfss/annual_data/annual_2024.html" target="_blank" rel="noreferrer">
-                CDC - 2024 BRFSS Survey Data and Documentation
-              </Link>
-            </Typography>
-          </Box>
-        </Paper>
-
-        <Paper
-          elevation={0}
-          sx={{
-            flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
             borderRadius: 3,
@@ -126,10 +85,37 @@ function HomePage() {
             borderColor: 'divider',
           }}
         >
-          <Box sx={{ flexShrink: 0, px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              {loading ? 'Loading patients...' : 'Patient table'}
-            </Typography>
+          <Box sx={{ px: 2, pt: 2, pb: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Use the menu in each column header to filter and sort the data.
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Study based on:{' '}
+                  <Link href="https://www.cdc.gov/brfss/annual_data/annual_2024.html" target="_blank" rel="noreferrer">
+                    CDC - 2024 BRFSS Survey Data and Documentation
+                  </Link>
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
+                <TextField
+                  select
+                  label="Rows"
+                  value={perPage}
+                  onChange={handleRowsChange}
+                  size="small"
+                  sx={{ minWidth: 120 }}
+                >
+                  {[10, 25, 50, 100].map((option) => (
+                    <MenuItem key={option} value={option}>
+                      {option}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+            </Box>
           </Box>
 
           <Box sx={{ width: '100%' }}>

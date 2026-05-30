@@ -2,18 +2,20 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import ModelComparisonPage from './pages/ModelComparisonPage'
 import PredictPage from './pages/PredictPage'
+import ModelDetailPage from './pages/ModelDetailPage'
 
 function App() {
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     [
-      'rounded-full px-5 py-2 text-sm font-medium transition',
+      'rounded-full px-5 py-2 text-sm font-medium transition-colors duration-150',
       isActive
-        ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-200'
-        : 'text-emerald-900 hover:bg-emerald-100',
+        ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
+        : 'text-blue-900 hover:bg-blue-50',
     ].join(' ')
 
   return (
     <main className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
+      <div className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-4 px-6 py-5 sm:px-8">
           <nav className="flex flex-wrap justify-center gap-3">
             <NavLink to="/" className={linkClass} end>
@@ -22,16 +24,18 @@ function App() {
             <NavLink to="/predict" className={linkClass}>
               Prediction Lab
             </NavLink>
-            <NavLink to="/models-comparison" className={linkClass}>
+            <NavLink to="/models" className={linkClass}>
               Model Comparison
             </NavLink>
           </nav>
         </div>
+      </div>
 
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/predict" element={<PredictPage />} />
-        <Route path="/models-comparison" element={<ModelComparisonPage />} />
+        <Route path="/models" element={<ModelComparisonPage />} />
+        <Route path="/models/:id" element={<ModelDetailPage />} />
       </Routes>
     </main>
   )
