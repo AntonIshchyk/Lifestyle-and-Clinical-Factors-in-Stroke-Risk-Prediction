@@ -14,84 +14,11 @@ PROJECT_ROOT = BASE_DIR.parent
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 NOTEBOOK_PATH = PROJECT_ROOT / "ai_module" / "main.ipynb"
 DB_PATH = BASE_DIR / "healthcare.db"
-PATIENTS_TABLE = "patients"
-PATIENT_ID_COLUMN = "patient_id"
-
 
 def get_connection():
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
     return connection
-
-
-def table_exists(connection):
-    row = connection.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-        (PATIENTS_TABLE,),
-    ).fetchone()
-    return row is not None
-
-
-def get_columns(connection):
-    rows = connection.execute(f'PRAGMA table_info("{PATIENTS_TABLE}")').fetchall()
-    return [row["name"] for row in rows]
-
-
-def load_clean_df_from_notebook():
-    if not NOTEBOOK_PATH.exists():
-        raise FileNotFoundError(f"Missing notebook: {NOTEBOOK_PATH}")
-
-    namespace = {"__name__": "__notebook__", "__file__": str(NOTEBOOK_PATH)}
-    notebook = json.loads(NOTEBOOK_PATH.read_text(encoding="utf-8"))
-    current_directory = os.getcwd()
-
-    try:
-        os.chdir(NOTEBOOK_PATH.parent)
-
-        for cell in notebook["cells"]:
-            if cell.get("cell_type") != "code":
-                continue
-
-            source = "".join(cell.get("source", []))
-            if "find_high_correlation_pairs" in source:
-                continue
-
-            exec(compile(source, str(NOTEBOOK_PATH), "exec"), namespace)
-            if "clean_df" in namespace:
-                clean_df = namespace["clean_df"]
-                if not isinstance(clean_df, pd.DataFrame):
-                    raise TypeError("main.ipynb defines clean_df, but it is not a pandas DataFrame.")
-                return clean_df.copy()
-    finally:
-        os.chdir(current_directory)
-
-    raise RuntimeError("main.ipynb must define a pandas DataFrame named clean_df.")
-
-
-def prepare_patients_dataframe():
-    dataframe = load_clean_df_from_notebook().reset_index(drop=True)
-    dataframe.insert(0, PATIENT_ID_COLUMN, range(1, len(dataframe) + 1))
-    return dataframe
-
-
-def rebuild_database():
-    dataframe = prepare_patients_dataframe()
-
-    with get_connection() as connection:
-        connection.execute(f'DROP TABLE IF EXISTS "{PATIENTS_TABLE}"')
-        dataframe.to_sql(PATIENTS_TABLE, connection, if_exists="replace", index=False)
-        connection.execute(
-            f'CREATE INDEX IF NOT EXISTS idx_patients_patient_id ON "{PATIENTS_TABLE}" ("{PATIENT_ID_COLUMN}")'
-        )
-        connection.commit()
-
-
-def ensure_database():
-    with get_connection() as connection:
-        if table_exists(connection):
-            return
-    rebuild_database()
-
 
 def display_value(value):
     if value is None or pd.isna(value):
@@ -102,51 +29,65 @@ def display_value(value):
         return f"{value:.4g}"
     return str(value)
 
+@app.route("/api/registry")
+def api_registry():
+    with get_connection() as con:
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS _registry (
+                name TEXT PRIMARY KEY, type TEXT, reference TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        rows = con.execute("SELECT name, type, reference, created_at FROM _registry ORDER BY created_at DESC").fetchall()
+    
+    result = []
+    for r in rows:
+        d = dict(r)
+        if d["type"] == "model":
+            d["metadata"] = json.loads(d["reference"])
+        result.append(d)
+    return jsonify(result)
 
-def get_patients(page, per_page):
-    offset = (page - 1) * per_page
-
-    with get_connection() as connection:
-        columns = get_columns(connection)
-        total = connection.execute(
-            f'SELECT COUNT(*) FROM "{PATIENTS_TABLE}"'
-        ).fetchone()[0]
-        rows = connection.execute(
-            f'''
-            SELECT *
-            FROM "{PATIENTS_TABLE}"
-            ORDER BY "{PATIENT_ID_COLUMN}"
-            LIMIT ? OFFSET ?
-            ''',
-            [per_page, offset],
-        ).fetchall()
-
-    patients = [
-        {column: display_value(row[column]) for column in columns}
-        for row in rows
-    ]
-    return columns, patients, total
-
-
-@app.route("/api/patients")
-def api_patients():
+@app.route("/api/data/<name>")
+def api_data(name):
     page = request.args.get("page", default=1, type=int)
     per_page = request.args.get("per_page", default=10, type=int)
 
     page = max(page, 1)
     per_page = min(max(per_page, 1), 100)
 
-    columns, patients, total = get_patients(page, per_page)
-    return jsonify(
-        {
-            "columns": columns,
-            "patients": patients,
-            "page": page,
-            "per_page": per_page,
-            "total": total,
-        }
-    )
+    offset = (page - 1) * per_page
 
+    with get_connection() as con:
+        # Check if dataset exists
+        row = con.execute("SELECT reference FROM _registry WHERE name=? AND type='dataset'", (name,)).fetchone()
+        if not row:
+            abort(404, description=f"Dataset '{name}' not found")
+        
+        table_name = row["reference"]
+        columns_info = con.execute(f'PRAGMA table_info("{table_name}")').fetchall()
+        columns = [c["name"] for c in columns_info]
+        
+        total = con.execute(f'SELECT COUNT(*) FROM "{table_name}"').fetchone()[0]
+        rows = con.execute(
+            f'SELECT * FROM "{table_name}" LIMIT ? OFFSET ?',
+            (per_page, offset)
+        ).fetchall()
+
+    patients = [
+        {column: display_value(r[column]) for column in columns}
+        for r in rows
+    ]
+    
+    # We rename 'patients' to 'rows' to match generic needs, or keep 'patients' for frontend compat? 
+    # The user asked to render in ui, so let's use 'rows' and change frontend.
+    return jsonify({
+        "name": name,
+        "columns": columns,
+        "rows": patients,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+    })
 
 @app.route("/assets/<path:filename>")
 def frontend_assets(filename):
@@ -165,13 +106,6 @@ def react_app(path):
         )
     return send_from_directory(FRONTEND_DIST, "index.html")
 
-
-@app.cli.command("rebuild-db")
-def rebuild_db_command():
-    rebuild_database()
-    print(f"Rebuilt {DB_PATH}")
-
-
 if __name__ == "__main__":
-    ensure_database()
     app.run(debug=True)
+

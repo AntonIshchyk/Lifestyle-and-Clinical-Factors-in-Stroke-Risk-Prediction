@@ -1,8 +1,8 @@
 import { NavLink, Route, Routes } from 'react-router-dom'
-import HomePage from './pages/HomePage'
-import ModelComparisonPage from './pages/ModelComparisonPage'
-import PredictPage from './pages/PredictPage'
-import ModelDetailPage from './pages/ModelDetailPage'
+import ModelDetail from './pages/ModelDetail'
+import ModelComparison from './pages/ModelComparison'
+import Predict from './pages/Predict'
+import Patients from './pages/Patients'
 
 function App() {
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -32,10 +32,10 @@ function App() {
       </div>
 
       <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/predict" element={<PredictPage />} />
-        <Route path="/models" element={<ModelComparisonPage />} />
-        <Route path="/models/:id" element={<ModelDetailPage />} />
+        <Route path="/" element={<Patients />} />
+        <Route path="/predict" element={<Predict />} />
+        <Route path="/models" element={<ModelComparison />} />
+        <Route path="/models/:id" element={<ModelDetail />} />
       </Routes>
     </main>
   )
