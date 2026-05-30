@@ -19,11 +19,11 @@ type PatientsResponse = {
 }
 
 type RegistryItem = {
-  name: string
+  id: string
   type: string
+  label: string
   reference: string
   created_at: string
-  metadata?: any
 }
 
 function Patients() {
@@ -45,7 +45,7 @@ function Patients() {
 
   useEffect(() => {
     if (!selectedDataset && datasets.length > 0) {
-      setSelectedDataset(datasets[0].name)
+      setSelectedDataset(datasets[0].id)
     }
   }, [datasets, selectedDataset])
 
@@ -144,8 +144,8 @@ function Patients() {
                     sx={{ minWidth: 200 }}
                   >
                     {datasets.map((option) => (
-                      <MenuItem key={option.name} value={option.name}>
-                        {option.name}
+                      <MenuItem key={option.id} value={option.id}>
+                        {option.label}
                       </MenuItem>
                     ))}
                   </TextField>

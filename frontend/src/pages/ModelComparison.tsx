@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
-import Chip from '@mui/material/Chip'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import { DataGrid, type GridColDef, type GridRowParams } from '@mui/x-data-grid'
@@ -33,37 +32,17 @@ export const FEAT_LABEL: Record<FeatureSet, string> = {
   combined: 'Combined',
 }
 
-export function AlgoChip({ algo }: { algo: Algorithm }) {
-  return (
-    <Chip
-      label={ALGO_LABEL[algo]}
-      size="small"
-      variant="outlined"
-      sx={{ fontSize: '0.7rem', height: 22 }}
-    />
-  )
-}
-
-export function FeatChip({ feat }: { feat: FeatureSet }) {
-  return (
-    <Chip
-      label={FEAT_LABEL[feat]}
-      size="small"
-      variant="outlined"
-      sx={{ fontSize: '0.7rem', height: 22 }}
-    />
-  )
-}
-
 function pct(v: number) {
   return `${(v * 100).toFixed(1)}%`
 }
 
 async function fetchModels(): Promise<ModelRow[]> {
-  throw new Error('fetchModels is not implemented yet')
+  const res = await fetch('/api/models')
+  if (!res.ok) throw new Error(`${res.status}`)
+  return res.json() as Promise<ModelRow[]>
 }
 
-function useColumns(bestAuc: number): GridColDef[] {
+function useColumns(): GridColDef[] {
   return useMemo<GridColDef[]>(() => [
     {
       field: 'algorithm',
@@ -71,7 +50,7 @@ function useColumns(bestAuc: number): GridColDef[] {
       flex: 1.4,
       minWidth: 150,
       sortable: true,
-      renderCell: ({ value }) => <AlgoChip algo={value as Algorithm} />,
+      renderCell: ({ value }) => <Typography variant="body2">{ALGO_LABEL[value as Algorithm]}</Typography>,
     },
     {
       field: 'featureSet',
@@ -79,7 +58,7 @@ function useColumns(bestAuc: number): GridColDef[] {
       flex: 1,
       minWidth: 120,
       sortable: true,
-      renderCell: ({ value }) => <FeatChip feat={value as FeatureSet} />,
+      renderCell: ({ value }) => <Typography variant="body2">{FEAT_LABEL[value as FeatureSet]}</Typography>,
     },
     {
       field: 'auc',
@@ -89,17 +68,7 @@ function useColumns(bestAuc: number): GridColDef[] {
       sortable: true,
       align: 'left',
       headerAlign: 'left',
-      renderCell: ({ value, row }) => (
-        <Typography
-          variant="body2"
-          sx={{
-            fontWeight: row.auc === bestAuc ? 700 : 400,
-            color: row.auc === bestAuc ? 'primary.main' : 'text.primary',
-          }}
-        >
-          {(value as number).toFixed(3)}
-        </Typography>
-      ),
+      valueFormatter: (value) => (value as number).toFixed(3),
     },
     {
       field: 'accuracy',
@@ -141,7 +110,7 @@ function useColumns(bestAuc: number): GridColDef[] {
       headerAlign: 'left',
       valueFormatter: (value) => pct(value as number),
     },
-  ], [bestAuc])
+  ], [])
 }
 
 function ModelComparison() {
@@ -150,16 +119,13 @@ function ModelComparison() {
   const query = useQuery({
     queryKey: ['models'],
     queryFn: fetchModels,
-    enabled: false,
     staleTime: 30_000,
   })
 
   const models = query.data ?? []
   const loading = query.isLoading || query.isFetching
   const error = query.isError ? 'Could not load models from the backend.' : ''
-
-  const bestAuc = models.length ? Math.max(...models.map((m) => m.auc)) : 0
-  const columns = useColumns(bestAuc)
+  const columns = useColumns()
 
   return (
     <main className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-6 lg:px-8">
@@ -198,9 +164,6 @@ function ModelComparison() {
               hideFooter
               disableRowSelectionOnClick={false}
               onRowClick={(params: GridRowParams) => navigate(`/models/${params.row.id}`)}
-              initialState={{
-                sorting: { sortModel: [{ field: 'auc', sort: 'desc' }] },
-              }}
               sx={{
                 border: 0,
                 cursor: 'pointer',
