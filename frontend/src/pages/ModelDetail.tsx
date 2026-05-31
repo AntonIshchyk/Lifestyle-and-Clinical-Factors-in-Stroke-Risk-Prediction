@@ -5,6 +5,7 @@ import Button from '@mui/material/Button'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import { LineChart } from '@mui/x-charts/LineChart'
 import { useQuery } from '@tanstack/react-query'
 import { ALGO_LABEL, FEAT_LABEL } from './ModelComparison'
 import type { Algorithm, FeatureSet } from './ModelComparison'
@@ -35,6 +36,16 @@ type FeatureImportance = {
   importance: number
 }
 
+type RocCurvePoint = {
+  fpr: number
+  tpr: number
+}
+
+type RocCurve = {
+  fpr: number[]
+  tpr: number[]
+} | RocCurvePoint[]
+
 export type ModelDetail = {
   id: string
   algorithm: Algorithm
@@ -43,6 +54,7 @@ export type ModelDetail = {
   classificationReport: ClassificationReport
   confusionMatrix: ConfusionMatrix
   featureImportances: FeatureImportance[]
+  rocCurve: RocCurve
 }
 
 async function fetchModelDetail(modelId: string): Promise<ModelDetail> {
@@ -53,6 +65,27 @@ async function fetchModelDetail(modelId: string): Promise<ModelDetail> {
 
 const fmt3 = (v: number) => v.toFixed(3)
 const pct  = (v: number) => `${(v * 100).toFixed(1)}%`
+
+function toRocPoints(rocCurve: RocCurve | null | undefined): RocCurvePoint[] {
+  if (!rocCurve) return []
+
+  if (Array.isArray(rocCurve)) {
+    return rocCurve
+      .map((point) => ({ fpr: point.fpr, tpr: point.tpr }))
+      .filter((point) => Number.isFinite(point.fpr) && Number.isFinite(point.tpr))
+      .sort((left, right) => left.fpr - right.fpr)
+  }
+
+  const { fpr, tpr } = rocCurve
+  const pointCount = Math.min(fpr.length, tpr.length)
+
+  return Array.from({ length: pointCount }, (_, index) => ({
+    fpr: fpr[index],
+    tpr: tpr[index],
+  }))
+    .filter((point) => Number.isFinite(point.fpr) && Number.isFinite(point.tpr))
+    .sort((left, right) => left.fpr - right.fpr)
+}
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -183,6 +216,7 @@ function ModelDetail() {
   })
 
   const model = query.data ?? null
+  const rocPoints = useMemo(() => toRocPoints(model?.rocCurve), [model?.rocCurve])
   const confusionTotal = model
     ? model.confusionMatrix.tn + model.confusionMatrix.fp + model.confusionMatrix.fn + model.confusionMatrix.tp
     : null
@@ -215,10 +249,33 @@ function ModelDetail() {
             <FeatureImportanceList importances={model?.featureImportances ?? null} />
           </SectionCard>
           <SectionCard title="ROC curve">
-            <Box sx={{ height: 280, bgcolor: 'grey.50', borderRadius: 2, border: '1px dashed', borderColor: 'divider', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-              <Typography variant="body2" color="text.secondary">ROC curve</Typography>
-              <Typography variant="caption" color="text.disabled">AUC = {model ? fmt3(model.auc) : 'N/A'}</Typography>
-            </Box>
+            {rocPoints.length ? (
+              <LineChart
+                height={380}
+                xAxis={[{ data: rocPoints.map((point) => point.fpr), label: 'False Positive Rate' }]}
+                yAxis={[{ min: 0, max: 1, label: 'True Positive Rate' }]}
+                series={[
+                  {
+                    data: rocPoints.map((point) => point.fpr),
+                    label: 'Chance',
+                    color: '#cbd5e1',
+                    showMark: false,
+                  },
+                  {
+                    data: rocPoints.map((point) => point.tpr),
+                    label: `ROC curve (AUC = ${model ? fmt3(model.auc) : 'N/A'})`,
+                    color: '#1976d2',
+                    showMark: false,
+                  },
+                ]}
+                margin={{ top: 16, right: 16, bottom: 28, left: 52 }}
+              />
+            ) : (
+                <Box sx={{ height: 380, bgcolor: 'grey.50', borderRadius: 2, border: '1px dashed', borderColor: 'divider', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                  <Typography variant="body2" color="text.secondary">ROC curve</Typography>
+                  <Typography variant="caption" color="text.disabled">AUC = {model ? fmt3(model.auc) : 'N/A'}</Typography>
+                </Box>
+            )}
           </SectionCard>
         </Box>
       </Box>
