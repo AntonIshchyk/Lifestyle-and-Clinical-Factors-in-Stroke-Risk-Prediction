@@ -123,7 +123,7 @@ function Patients() {
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
                   <Typography variant="body2" color="text.secondary">
-                    Use the menu in each column header to filter and sort the data.
+                    Use the menu in each column header to filter and sort the data
                   </Typography>
                 </Box>
 

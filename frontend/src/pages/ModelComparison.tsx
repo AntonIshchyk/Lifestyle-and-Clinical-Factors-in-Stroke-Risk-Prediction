@@ -145,7 +145,7 @@ function ModelComparison() {
               justifyContent: 'space-between',
             }}
           >
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 400 }}>
               Click on a row to view model details
             </Typography>
           </Box>
