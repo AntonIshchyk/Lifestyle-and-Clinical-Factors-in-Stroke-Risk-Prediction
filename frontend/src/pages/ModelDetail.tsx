@@ -1,100 +1,23 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { LineChart } from '@mui/x-charts/LineChart'
 import { useQuery } from '@tanstack/react-query'
-import { fetchJson } from '../api'
-import { ALGORITHM_LABELS, FEATURE_SET_LABELS, type Algorithm, type FeatureSet } from '../modelMetadata'
-
-type ClassMetrics = {
-  precision: number
-  recall: number
-  'f1-score': number
-  support: number
-}
-
-type ClassificationReport = {
-  classes: Record<string, ClassMetrics>
-  macro_avg: ClassMetrics
-  weighted_avg: ClassMetrics
-  accuracy: number
-}
-
-type ConfusionMatrix = {
-  tn: number
-  fp: number
-  fn: number
-  tp: number
-}
-
-type FeatureImportance = {
-  feature: string
-  importance: number
-}
-
-type RocCurvePoint = {
-  fpr: number
-  tpr: number
-}
-
-type RocCurve = {
-  fpr: number[]
-  tpr: number[]
-} | RocCurvePoint[]
-
-export type ModelDetail = {
-  id: string
-  algorithm: Algorithm
-  featureSet: FeatureSet
-  auc: number
-  classificationReport: ClassificationReport
-  confusionMatrix: ConfusionMatrix
-  featureImportances: FeatureImportance[]
-  rocCurve: RocCurve
-}
-
-async function fetchModelDetail(modelId: string): Promise<ModelDetail> {
-  return fetchJson<ModelDetail>(`/api/models/${modelId}`)
-}
-
-const fmt3 = (v: number) => v.toFixed(3)
-const pct = (v: number) => `${(v * 100).toFixed(1)}%`
-
-function toRocPoints(rocCurve: RocCurve | null | undefined): RocCurvePoint[] {
-  if (!rocCurve) return []
-
-  if (Array.isArray(rocCurve)) {
-    return rocCurve
-      .map((point) => ({ fpr: point.fpr, tpr: point.tpr }))
-      .filter((point) => Number.isFinite(point.fpr) && Number.isFinite(point.tpr))
-      .sort((left, right) => left.fpr - right.fpr)
-  }
-
-  const { fpr, tpr } = rocCurve
-  const pointCount = Math.min(fpr.length, tpr.length)
-
-  return Array.from({ length: pointCount }, (_, index) => ({
-    fpr: fpr[index],
-    tpr: tpr[index],
-  }))
-    .filter((point) => Number.isFinite(point.fpr) && Number.isFinite(point.tpr))
-    .sort((left, right) => left.fpr - right.fpr)
-}
-
-function SectionCard({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-      <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{title}</Typography>
-      </Box>
-      <Box sx={{ p: 2 }}>{children}</Box>
-    </Paper>
-  )
-}
+import SectionCard from '../components/SectionCard'
+import {
+  confusionTotal,
+  fetchModelDetail,
+  fmt3,
+  modelLabel,
+  pct,
+  toRocPoints,
+  type ClassificationReport,
+  type ConfusionMatrix,
+  type FeatureImportance,
+} from '../modelData'
 
 function ClassificationReportTable({ report }: { report: ClassificationReport | null }) {
   if (!report) return <Typography variant="body2">No classification report yet.</Typography>
@@ -224,8 +147,8 @@ function ModelDetail() {
 
   const model = query.data ?? null
   const rocPoints = useMemo(() => toRocPoints(model?.rocCurve), [model?.rocCurve])
-  const confusionTotal = model
-    ? model.confusionMatrix.tn + model.confusionMatrix.fp + model.confusionMatrix.fn + model.confusionMatrix.tp
+  const modelConfusionTotal = model
+    ? confusionTotal(model.confusionMatrix)
     : null
 
   return (
@@ -236,7 +159,7 @@ function ModelDetail() {
             All models
           </Button>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            {model ? `${ALGORITHM_LABELS[model.algorithm]} - ${FEATURE_SET_LABELS[model.featureSet]}` : `Model details${id ? `: ${id}` : ''}`}
+            {model ? modelLabel(model) : `Model details${id ? `: ${id}` : ''}`}
           </Typography>
           {query.isError   && <Typography variant="body2" color="error"          sx={{ mt: 1 }}>Could not load model details from the backend.</Typography>}
           {query.isLoading && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Loading model details...</Typography>}
@@ -246,7 +169,7 @@ function ModelDetail() {
           <SectionCard title="Classification report">
             <ClassificationReportTable report={model?.classificationReport ?? null} />
           </SectionCard>
-          <SectionCard title={`Confusion matrix (${confusionTotal ?? '-'})`}>
+          <SectionCard title={`Confusion matrix (${modelConfusionTotal ?? '-'})`}>
             <ConfusionMatrixGrid cm={model?.confusionMatrix ?? null} />
           </SectionCard>
         </Box>

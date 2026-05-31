@@ -1,9 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-import { DataGrid, type GridColDef, type GridRowParams } from '@mui/x-data-grid'
+import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
+import { DataGrid, type GridColDef, type GridRowParams, type GridRowSelectionModel } from '@mui/x-data-grid'
 import { useQuery } from '@tanstack/react-query'
 import { fetchJson } from '../api'
 import { ALGORITHM_LABELS, FEATURE_SET_LABELS, type Algorithm, type FeatureSet } from '../modelMetadata'
@@ -100,6 +102,7 @@ function useColumns(): GridColDef[] {
 
 function ModelComparison() {
   const navigate = useNavigate()
+  const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({ type: 'include', ids: new Set() })
 
   const query = useQuery({
     queryKey: ['models'],
@@ -111,6 +114,16 @@ function ModelComparison() {
   const loading = query.isLoading || query.isFetching
   const error = query.isError ? 'Could not load models from the backend.' : ''
   const columns = useColumns()
+  const selectedIds = useMemo(
+    () => (selectionModel.type === 'include' ? [...selectionModel.ids].map(String) : []),
+    [selectionModel],
+  )
+  const canCompare = selectedIds.length >= 2
+
+  const handleCompare = () => {
+    if (!canCompare) return
+    navigate(`/models/compare?ids=${encodeURIComponent(selectedIds.join(','))}`)
+  }
 
   return (
     <main className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-6 lg:px-8">
@@ -126,13 +139,24 @@ function ModelComparison() {
               borderBottom: '1px solid',
               borderColor: 'divider',
               display: 'flex',
+              gap: 1.5,
               alignItems: 'center',
               justifyContent: 'space-between',
+              flexWrap: 'wrap',
             }}
           >
             <Typography variant="subtitle2" sx={{ fontWeight: 400 }}>
-              Click on a row to view model details
+              Select models to compare, or click a row to view details
             </Typography>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<CompareArrowsIcon />}
+              disabled={!canCompare}
+              onClick={handleCompare}
+            >
+              Compare selected ({selectedIds.length})
+            </Button>
           </Box>
 
           {error ? (
@@ -147,7 +171,11 @@ function ModelComparison() {
               density="compact"
               autoHeight
               hideFooter
-              disableRowSelectionOnClick={false}
+              checkboxSelection
+              disableRowSelectionOnClick
+              disableRowSelectionExcludeModel
+              rowSelectionModel={selectionModel}
+              onRowSelectionModelChange={setSelectionModel}
               onRowClick={(params: GridRowParams) => navigate(`/models/${params.row.id}`)}
               sx={{
                 border: 0,

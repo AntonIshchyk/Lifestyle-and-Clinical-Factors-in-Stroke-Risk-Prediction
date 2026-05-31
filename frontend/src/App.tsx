@@ -6,6 +6,7 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 
 const ModelDetail = lazy(() => import('./pages/ModelDetail'))
 const ModelComparison = lazy(() => import('./pages/ModelComparison'))
+const ModelCompare = lazy(() => import('./pages/ModelCompare'))
 const Patients = lazy(() => import('./pages/Patients'))
 const PredictionLab = lazy(() => import('./pages/Predict'))
 
@@ -53,6 +54,7 @@ function App() {
           <Route path="/" element={<Patients />} />
           <Route path="/predict" element={<PredictionLab />} />
           <Route path="/models" element={<ModelComparison />} />
+          <Route path="/models/compare" element={<ModelCompare />} />
           <Route path="/models/:id" element={<ModelDetail />} />
         </Routes>
       </Suspense>
