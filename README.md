@@ -6,19 +6,11 @@
 pip install -r requirements.txt
 ```
 
-2. Install project in editable mode (recommended)
-
-```bash
-python -m pip install -e .
-```
-
-This makes `backend` and `ai_module` importable from notebooks, scripts, and tests.
-
-3. Run the notebook to generate the datasets and models
+2. Run the notebook to generate the datasets and models
 
 Open `ai_module/main.ipynb` in VS Code or Jupyter and run all cells from top to bottom.
 
-4. Install frontend dependencies (once)
+3. Install frontend dependencies (once)
 
 ```bash
 cd frontend
@@ -27,13 +19,13 @@ npm install
 
 The frontend is a Vite + React + TypeScript app; Node.js is only needed for installing and building it.
 
-5. Build the frontend
+4. Build the frontend
 
 ```bash
 npm run build
 ```
 
-6. Run the backend
+5. Run the backend
 
 ```bash
 cd ..
