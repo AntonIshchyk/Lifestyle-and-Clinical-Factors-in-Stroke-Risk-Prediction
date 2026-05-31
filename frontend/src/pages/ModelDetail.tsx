@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -7,8 +7,8 @@ import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { LineChart } from '@mui/x-charts/LineChart'
 import { useQuery } from '@tanstack/react-query'
-import { ALGO_LABEL, FEAT_LABEL } from './ModelComparison'
-import type { Algorithm, FeatureSet } from './ModelComparison'
+import { fetchJson } from '../api'
+import { ALGORITHM_LABELS, FEATURE_SET_LABELS, type Algorithm, type FeatureSet } from '../modelMetadata'
 
 type ClassMetrics = {
   precision: number
@@ -58,13 +58,11 @@ export type ModelDetail = {
 }
 
 async function fetchModelDetail(modelId: string): Promise<ModelDetail> {
-  const res = await fetch(`/api/models/${modelId}`)
-  if (!res.ok) throw new Error(`Request failed with status ${res.status}`)
-  return res.json()
+  return fetchJson<ModelDetail>(`/api/models/${modelId}`)
 }
 
 const fmt3 = (v: number) => v.toFixed(3)
-const pct  = (v: number) => `${(v * 100).toFixed(1)}%`
+const pct = (v: number) => `${(v * 100).toFixed(1)}%`
 
 function toRocPoints(rocCurve: RocCurve | null | undefined): RocCurvePoint[] {
   if (!rocCurve) return []
@@ -87,7 +85,7 @@ function toRocPoints(rocCurve: RocCurve | null | undefined): RocCurvePoint[] {
     .sort((left, right) => left.fpr - right.fpr)
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+function SectionCard({ title, children }: { title: string; children: ReactNode }) {
   return (
     <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
       <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -161,6 +159,7 @@ function ConfusionMatrixGrid({ cm }: { cm: ConfusionMatrix | null }) {
   if (!cm) return <Typography variant="body2">No confusion matrix yet.</Typography>
 
   const total = cm.tn + cm.fp + cm.fn + cm.tp
+  const formatShare = (value: number) => (total > 0 ? pct(value / total) : '0.0%')
   const cells = [
     { label: 'True Negative',  value: cm.tn, positive: true  },
     { label: 'False Positive', value: cm.fp, positive: false },
@@ -179,7 +178,7 @@ function ConfusionMatrixGrid({ cm }: { cm: ConfusionMatrix | null }) {
             {c.label}
           </Typography>
           <Typography variant="caption" sx={{ color: c.positive ? 'success.dark' : 'error.dark' }}>
-            {pct(c.value / total)} of total
+            {formatShare(c.value)} of total
           </Typography>
         </Box>
       ))}
@@ -188,10 +187,11 @@ function ConfusionMatrixGrid({ cm }: { cm: ConfusionMatrix | null }) {
 }
 
 function FeatureImportanceList({ importances }: { importances: FeatureImportance[] | null }) {
-  if (!importances?.length) return <Typography variant="body2" color="text.secondary">No feature importances yet.</Typography>
+  const sorted = useMemo(() => [...(importances ?? [])].sort((a, b) => b.importance - a.importance), [importances])
+  if (!sorted.length) return <Typography variant="body2" color="text.secondary">No feature importances yet.</Typography>
 
-  const sorted = useMemo(() => [...importances].sort((a, b) => b.importance - a.importance), [importances])
   const max = sorted[0].importance
+  const barWidth = (importance: number) => (max > 0 ? `${(importance / max) * 100}%` : '0%')
 
   return (
     <Box sx={{ maxHeight: 380, overflowY: 'auto' }}>
@@ -200,7 +200,7 @@ function FeatureImportanceList({ importances }: { importances: FeatureImportance
           <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'right' }}>{idx + 1}</Typography>
           <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{fi.feature}</Typography>
           <Box sx={{ borderRadius: 1, height: 6, overflow: 'hidden' }}>
-            <Box sx={{ height: '100%', width: `${(fi.importance / max) * 100}%`, bgcolor: 'primary.main', borderRadius: 1 }} />
+            <Box sx={{ height: '100%', width: barWidth(fi.importance), bgcolor: 'primary.main', borderRadius: 1 }} />
           </Box>
           <Typography variant="caption" sx={{ textAlign: 'right' }}>
             {(fi.importance * 100).toFixed(1)}%
@@ -236,7 +236,7 @@ function ModelDetail() {
             All models
           </Button>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            {model ? `${ALGO_LABEL[model.algorithm]} - ${FEAT_LABEL[model.featureSet]}` : `Model details${id ? `: ${id}` : ''}`}
+            {model ? `${ALGORITHM_LABELS[model.algorithm]} - ${FEATURE_SET_LABELS[model.featureSet]}` : `Model details${id ? `: ${id}` : ''}`}
           </Typography>
           {query.isError   && <Typography variant="body2" color="error"          sx={{ mt: 1 }}>Could not load model details from the backend.</Typography>}
           {query.isLoading && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Loading model details...</Typography>}
@@ -278,10 +278,10 @@ function ModelDetail() {
                 margin={{ top: 16, right: 16, bottom: 28, left: 52 }}
               />
             ) : (
-                <Box sx={{ height: 380, borderRadius: 2, border: '1px dashed', borderColor: 'divider', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
-                  <Typography variant="body2" color="text.secondary">ROC curve</Typography>
-                  <Typography variant="caption" color="text.disabled">AUC = {model ? fmt3(model.auc) : 'N/A'}</Typography>
-                </Box>
+              <Box sx={{ height: 380, borderRadius: 2, border: '1px dashed', borderColor: 'divider', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                <Typography variant="body2" color="text.secondary">ROC curve</Typography>
+                <Typography variant="caption" color="text.disabled">AUC = {model ? fmt3(model.auc) : 'N/A'}</Typography>
+              </Box>
             )}
           </SectionCard>
         </Box>

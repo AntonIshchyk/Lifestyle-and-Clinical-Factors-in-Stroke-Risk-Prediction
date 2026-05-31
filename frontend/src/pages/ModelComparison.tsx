@@ -5,11 +5,10 @@ import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import { DataGrid, type GridColDef, type GridRowParams } from '@mui/x-data-grid'
 import { useQuery } from '@tanstack/react-query'
+import { fetchJson } from '../api'
+import { ALGORITHM_LABELS, FEATURE_SET_LABELS, type Algorithm, type FeatureSet } from '../modelMetadata'
 
-export type Algorithm = 'random_forest' | 'xgboost' | 'lightgbm'
-export type FeatureSet = 'lifestyle' | 'clinical' | 'combined'
-
-export type ModelRow = {
+type ModelRow = {
   id: string
   algorithm: Algorithm
   featureSet: FeatureSet
@@ -20,26 +19,12 @@ export type ModelRow = {
   recall: number
 }
 
-export const ALGO_LABEL: Record<Algorithm, string> = {
-  random_forest: 'Random Forest',
-  xgboost: 'XGBoost',
-  lightgbm: 'LightGBM',
-}
-
-export const FEAT_LABEL: Record<FeatureSet, string> = {
-  lifestyle: 'Lifestyle',
-  clinical: 'Clinical',
-  combined: 'Combined',
-}
-
 function pct(v: number) {
   return `${(v * 100).toFixed(1)}%`
 }
 
 async function fetchModels(): Promise<ModelRow[]> {
-  const res = await fetch('/api/models')
-  if (!res.ok) throw new Error(`${res.status}`)
-  return res.json() as Promise<ModelRow[]>
+  return fetchJson<ModelRow[]>('/api/models')
 }
 
 function useColumns(): GridColDef[] {
@@ -50,7 +35,7 @@ function useColumns(): GridColDef[] {
       flex: 1.4,
       minWidth: 150,
       sortable: true,
-      renderCell: ({ value }) => <Typography variant="body2">{ALGO_LABEL[value as Algorithm]}</Typography>,
+      renderCell: ({ value }) => <Typography variant="body2">{ALGORITHM_LABELS[value as Algorithm]}</Typography>,
     },
     {
       field: 'featureSet',
@@ -58,7 +43,7 @@ function useColumns(): GridColDef[] {
       flex: 1,
       minWidth: 120,
       sortable: true,
-      renderCell: ({ value }) => <Typography variant="body2">{FEAT_LABEL[value as FeatureSet]}</Typography>,
+      renderCell: ({ value }) => <Typography variant="body2">{FEATURE_SET_LABELS[value as FeatureSet]}</Typography>,
     },
     {
       field: 'auc',

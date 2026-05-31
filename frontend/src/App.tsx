@@ -1,9 +1,13 @@
+import { lazy, Suspense } from 'react'
 import Link from '@mui/material/Link'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import { NavLink, Route, Routes } from 'react-router-dom'
-import ModelDetail from './pages/ModelDetail'
-import ModelComparison from './pages/ModelComparison'
-import Predict from './pages/Predict'
-import Patients from './pages/Patients'
+
+const ModelDetail = lazy(() => import('./pages/ModelDetail'))
+const ModelComparison = lazy(() => import('./pages/ModelComparison'))
+const Patients = lazy(() => import('./pages/Patients'))
+const PredictionLab = lazy(() => import('./pages/Predict'))
 
 function App() {
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -38,12 +42,20 @@ function App() {
         </div>
       </div>
 
-      <Routes>
-        <Route path="/" element={<Patients />} />
-        <Route path="/predict" element={<Predict />} />
-        <Route path="/models" element={<ModelComparison />} />
-        <Route path="/models/:id" element={<ModelDetail />} />
-      </Routes>
+      <Suspense
+        fallback={
+          <Box sx={{ px: 4, py: 3 }}>
+            <Typography variant="body2" color="text.secondary">Loading page...</Typography>
+          </Box>
+        }
+      >
+        <Routes>
+          <Route path="/" element={<Patients />} />
+          <Route path="/predict" element={<PredictionLab />} />
+          <Route path="/models" element={<ModelComparison />} />
+          <Route path="/models/:id" element={<ModelDetail />} />
+        </Routes>
+      </Suspense>
     </main>
   )
 }
