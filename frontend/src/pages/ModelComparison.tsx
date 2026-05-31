@@ -146,7 +146,7 @@ function ModelComparison() {
             }}
           >
             <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-              All Models - Click on a row to view model details
+              Click on a row to view model details
             </Typography>
           </Box>
 

@@ -1,3 +1,4 @@
+import Link from '@mui/material/Link'
 import { NavLink, Route, Routes } from 'react-router-dom'
 import ModelDetail from './pages/ModelDetail'
 import ModelComparison from './pages/ModelComparison'
@@ -16,7 +17,8 @@ function App() {
   return (
     <main className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
       <div className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-4 px-6 py-5 sm:px-8">
+        <div className="mx-auto flex w-full max-w-5xl items-center px-6 py-5 sm:px-8">
+          <div className="flex-1" />
           <nav className="flex flex-wrap justify-center gap-3">
             <NavLink to="/" className={linkClass} end>
               Patients
@@ -28,6 +30,11 @@ function App() {
               Model Comparison
             </NavLink>
           </nav>
+          <div className="flex flex-1 justify-end">
+            <Link href="https://www.cdc.gov/brfss/annual_data/annual_2024.html" target="_blank" rel="noreferrer" underline="hover" className="text-xs text-slate-500 whitespace-nowrap">
+              Study based on: CDC BRFSS 2024
+            </Link>
+          </div>
         </div>
       </div>
 

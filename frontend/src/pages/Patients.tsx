@@ -1,7 +1,6 @@
 import { useState, useEffect, type ChangeEvent } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import Link from '@mui/material/Link'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
@@ -126,12 +125,6 @@ function Patients() {
                   <Typography variant="body2" color="text.secondary">
                     Use the menu in each column header to filter and sort the data.
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Study based on:{' '}
-                    <Link href="https://www.cdc.gov/brfss/annual_data/annual_2024.html" target="_blank" rel="noreferrer">
-                      CDC - 2024 BRFSS Survey Data and Documentation
-                    </Link>
-                  </Typography>
                 </Box>
 
                 <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
@@ -208,7 +201,7 @@ function Patients() {
           <Box sx={{ flexShrink: 0, px: 2, py: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1.5 }}>
               <Typography variant="body2" color="text.secondary">
-                {data ? `Showing page ${data.page} of ${totalPages} • ${perPage} rows per page` : null}
+                {data ? `Showing page ${data.page} of ${totalPages} • ${columns.length} columns • ${perPage} rows per page` : null}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1 }}>
                 <Button variant="outlined" disabled={page <= 1 || loading} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</Button>
