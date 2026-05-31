@@ -99,21 +99,28 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 function ClassificationReportTable({ report }: { report: ClassificationReport | null }) {
-  if (!report) return <Typography variant="body2" color="text.secondary">No classification report yet.</Typography>
+  if (!report) return <Typography variant="body2">No classification report yet.</Typography>
 
   const rows = [
-    ...Object.entries(report.classes).map(([name, m]) => ({ name, ...m, isAvg: false })),
-    { name: 'macro avg',    ...report.macro_avg,    isAvg: true },
-    { name: 'weighted avg', ...report.weighted_avg, isAvg: true },
+    ...Object.entries(report.classes).map(([name, m]) => ({ name, ...m })),
+    { name: 'macro avg', ...report.macro_avg },
+    { name: 'weighted avg', ...report.weighted_avg },
   ]
 
   const thSx = {
-    fontSize: '0.7rem', fontWeight: 700, color: 'text.secondary',
+    fontSize: '0.7rem', fontWeight: 700,
     textTransform: 'uppercase' as const, letterSpacing: '0.08em',
-    py: 0.75, px: 1, borderBottom: '1px solid', borderColor: 'divider',
-    bgcolor: 'grey.50', whiteSpace: 'nowrap' as const,
+    py: 0.75, px: 1.25, borderBottom: '1px solid', borderColor: 'divider',
+    bgcolor: 'transparent', whiteSpace: 'nowrap' as const,
   }
-  const tdSx = { fontSize: '0.8125rem', py: 0.75, px: 1, borderBottom: '1px solid', borderColor: 'divider' }
+  const tdSx = {
+    fontSize: '0.875rem',
+    py: 0.75,
+    px: 1.25,
+    borderBottom: '1px solid',
+    borderColor: 'divider',
+    fontVariantNumeric: 'tabular-nums' as const,
+  }
 
   return (
     <Box sx={{ overflowX: 'auto' }}>
@@ -127,22 +134,22 @@ function ClassificationReportTable({ report }: { report: ClassificationReport | 
         </thead>
         <tbody>
           {rows.map((row) => (
-            <Box component="tr" key={row.name} sx={{ bgcolor: row.isAvg ? 'grey.50' : 'transparent' }}>
-              <Box component="td" sx={{ ...tdSx, fontWeight: row.isAvg ? 600 : 400, color: row.isAvg ? 'text.secondary' : 'text.primary', whiteSpace: 'nowrap' }}>
+            <Box component="tr" key={row.name} sx={{ bgcolor: 'transparent' }}>
+                <Box component="td" sx={{ ...tdSx, fontWeight: 400, color: '#0f172a', whiteSpace: 'nowrap' }}>
                 {row.name}
               </Box>
-              <Box component="td" sx={{ ...tdSx, textAlign: 'right' }}>{fmt3(row.precision)}</Box>
-              <Box component="td" sx={{ ...tdSx, textAlign: 'right' }}>{fmt3(row.recall)}</Box>
-              <Box component="td" sx={{ ...tdSx, textAlign: 'right' }}>{fmt3(row['f1-score'])}</Box>
-              <Box component="td" sx={{ ...tdSx, textAlign: 'right', color: 'text.secondary' }}>
+              <Box component="td" sx={{ ...tdSx, textAlign: 'right', color: 'text.primary' }}>{fmt3(row.precision)}</Box>
+              <Box component="td" sx={{ ...tdSx, textAlign: 'right', color: 'text.primary' }}>{fmt3(row.recall)}</Box>
+              <Box component="td" sx={{ ...tdSx, textAlign: 'right', color: 'text.primary' }}>{fmt3(row['f1-score'])}</Box>
+              <Box component="td" sx={{ ...tdSx, textAlign: 'right', color: 'text.primary' }}>
                 {Math.round(row.support).toLocaleString()}
               </Box>
             </Box>
           ))}
-          <Box component="tr" sx={{ bgcolor: 'grey.50' }}>
-            <Box component="td" sx={{ ...tdSx, fontWeight: 600, color: 'text.secondary', borderBottom: 0 }}>accuracy</Box>
-            <Box component="td" colSpan={3} sx={{ ...tdSx, borderBottom: 0 }} />
-            <Box component="td" sx={{ ...tdSx, textAlign: 'right', borderBottom: 0 }}>{pct(report.accuracy)}</Box>
+          <Box component="tr" sx={{ bgcolor: 'transparent' }}>
+            <Box component="td" sx={{ ...tdSx, fontWeight: 400, color: '#0f172a' }}>accuracy</Box>
+            <Box component="td" colSpan={3} sx={{ ...tdSx }} />
+            <Box component="td" sx={{ ...tdSx, textAlign: 'right', color: 'text.primary' }}>{pct(report.accuracy)}</Box>
           </Box>
         </tbody>
       </table>
@@ -151,7 +158,7 @@ function ClassificationReportTable({ report }: { report: ClassificationReport | 
 }
 
 function ConfusionMatrixGrid({ cm }: { cm: ConfusionMatrix | null }) {
-  if (!cm) return <Typography variant="body2" color="text.secondary">No confusion matrix yet.</Typography>
+  if (!cm) return <Typography variant="body2">No confusion matrix yet.</Typography>
 
   const total = cm.tn + cm.fp + cm.fn + cm.tp
   const cells = [
@@ -171,7 +178,7 @@ function ConfusionMatrixGrid({ cm }: { cm: ConfusionMatrix | null }) {
           <Typography variant="caption" sx={{ fontWeight: 700, color: c.positive ? 'success.dark' : 'error.dark', display: 'block', mt: 0.5 }}>
             {c.label}
           </Typography>
-          <Typography variant="caption" sx={{ color: c.positive ? 'success.dark' : 'error.dark', opacity: 0.75 }}>
+          <Typography variant="caption" sx={{ color: c.positive ? 'success.dark' : 'error.dark' }}>
             {pct(c.value / total)} of total
           </Typography>
         </Box>
@@ -192,10 +199,10 @@ function FeatureImportanceList({ importances }: { importances: FeatureImportance
         <Box key={fi.feature} sx={{ display: 'grid', gridTemplateColumns: '28px 1fr 120px 48px', alignItems: 'center', gap: 1, py: 0.6, borderBottom: '1px solid', borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}>
           <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'right' }}>{idx + 1}</Typography>
           <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{fi.feature}</Typography>
-          <Box sx={{ bgcolor: 'grey.100', borderRadius: 1, height: 6, overflow: 'hidden' }}>
+          <Box sx={{ borderRadius: 1, height: 6, overflow: 'hidden' }}>
             <Box sx={{ height: '100%', width: `${(fi.importance / max) * 100}%`, bgcolor: 'primary.main', borderRadius: 1 }} />
           </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'right' }}>
+          <Typography variant="caption" sx={{ textAlign: 'right' }}>
             {(fi.importance * 100).toFixed(1)}%
           </Typography>
         </Box>
@@ -271,7 +278,7 @@ function ModelDetail() {
                 margin={{ top: 16, right: 16, bottom: 28, left: 52 }}
               />
             ) : (
-                <Box sx={{ height: 380, bgcolor: 'grey.50', borderRadius: 2, border: '1px dashed', borderColor: 'divider', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
+                <Box sx={{ height: 380, borderRadius: 2, border: '1px dashed', borderColor: 'divider', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5 }}>
                   <Typography variant="body2" color="text.secondary">ROC curve</Typography>
                   <Typography variant="caption" color="text.disabled">AUC = {model ? fmt3(model.auc) : 'N/A'}</Typography>
                 </Box>
