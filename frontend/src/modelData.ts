@@ -46,6 +46,7 @@ export type ModelDetail = {
   confusionMatrix: ConfusionMatrix
   featureImportances: FeatureImportance[]
   rocCurve: RocCurve
+  featureColumns: string[]
 }
 
 export async function fetchModelDetail(modelId: string): Promise<ModelDetail> {
@@ -63,22 +64,17 @@ export function confusionTotal(cm: ConfusionMatrix) {
   return cm.tn + cm.fp + cm.fn + cm.tp
 }
 
+function sanitizeRocPoints(points: RocCurvePoint[]): RocCurvePoint[] {
+  return points
+    .filter((point) => Number.isFinite(point.fpr) && Number.isFinite(point.tpr))
+    .sort((left, right) => left.fpr - right.fpr)
+}
+
 export function toRocPoints(rocCurve: RocCurve | null | undefined): RocCurvePoint[] {
   if (!rocCurve) return []
 
-  if (Array.isArray(rocCurve)) {
-    return rocCurve
-      .map((point) => ({ fpr: point.fpr, tpr: point.tpr }))
-      .filter((point) => Number.isFinite(point.fpr) && Number.isFinite(point.tpr))
-      .sort((left, right) => left.fpr - right.fpr)
-  }
+  if (Array.isArray(rocCurve)) return sanitizeRocPoints(rocCurve)
 
-  const pointCount = Math.min(rocCurve.fpr.length, rocCurve.tpr.length)
-
-  return Array.from({ length: pointCount }, (_, index) => ({
-    fpr: rocCurve.fpr[index],
-    tpr: rocCurve.tpr[index],
-  }))
-    .filter((point) => Number.isFinite(point.fpr) && Number.isFinite(point.tpr))
-    .sort((left, right) => left.fpr - right.fpr)
+  const len = Math.min(rocCurve.fpr.length, rocCurve.tpr.length)
+  return sanitizeRocPoints(Array.from({ length: len }, (_, index) => ({ fpr: rocCurve.fpr[index], tpr: rocCurve.tpr[index] })))
 }

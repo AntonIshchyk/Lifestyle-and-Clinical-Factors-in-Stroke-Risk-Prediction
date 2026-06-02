@@ -121,7 +121,7 @@ function FeatureImportanceList({ importances }: { importances: FeatureImportance
       {sorted.map((fi, idx) => (
         <Box key={fi.feature} sx={{ display: 'grid', gridTemplateColumns: '28px 1fr 120px 48px', alignItems: 'center', gap: 1, py: 0.6, borderBottom: '1px solid', borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}>
           <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'right' }}>{idx + 1}</Typography>
-          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{fi.feature}</Typography>
+          <Typography variant="body2" sx={{ fontFamily: 'monospace', }}>{fi.feature}</Typography>
           <Box sx={{ borderRadius: 1, height: 6, overflow: 'hidden' }}>
             <Box sx={{ height: '100%', width: barWidth(fi.importance), bgcolor: 'primary.main', borderRadius: 1 }} />
           </Box>

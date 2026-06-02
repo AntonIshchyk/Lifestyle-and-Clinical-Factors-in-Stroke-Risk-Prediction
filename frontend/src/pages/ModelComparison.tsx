@@ -9,8 +9,9 @@ import { DataGrid, type GridColDef, type GridRowParams, type GridRowSelectionMod
 import { useQuery } from '@tanstack/react-query'
 import { fetchJson } from '../api'
 import { ALGORITHM_LABELS, FEATURE_SET_LABELS, type Algorithm, type FeatureSet } from '../modelMetadata'
+import { pct } from '../modelData'
 
-type ModelRow = {
+export type ModelRow = {
   id: string
   algorithm: Algorithm
   featureSet: FeatureSet
@@ -21,8 +22,11 @@ type ModelRow = {
   recall: number
 }
 
-function pct(v: number) {
-  return `${(v * 100).toFixed(1)}%`
+type ModelComparisonProps = {
+  embedded?: boolean
+  mode?: 'compare' | 'select'
+  selectedModelId?: string
+  onModelSelect?: (model: ModelRow) => void
 }
 
 async function fetchModels(): Promise<ModelRow[]> {
@@ -100,7 +104,12 @@ function useColumns(): GridColDef[] {
   ], [])
 }
 
-function ModelComparison() {
+function ModelComparison({
+  embedded = false,
+  mode = 'compare',
+  selectedModelId = '',
+  onModelSelect,
+}: ModelComparisonProps) {
   const navigate = useNavigate()
   const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({ type: 'include', ids: new Set() })
 
@@ -119,80 +128,99 @@ function ModelComparison() {
     [selectionModel],
   )
   const canCompare = selectedIds.length >= 2
+  const selectMode = mode === 'select'
+  const rowSelectionModel: GridRowSelectionModel = selectMode
+    ? selectedModelId
+      ? { type: 'include', ids: new Set([selectedModelId]) }
+      : { type: 'include', ids: new Set() }
+    : selectionModel
 
   const handleCompare = () => {
     if (!canCompare) return
     navigate(`/models/compare?ids=${encodeURIComponent(selectedIds.join(','))}`)
   }
 
+  const handleRowClick = (params: GridRowParams) => {
+    if (selectMode) {
+      onModelSelect?.(params.row as ModelRow)
+      return
+    }
+    navigate(`/models/${params.row.id}`)
+  }
+
+  const content = (
+    <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+      <Box
+        sx={{
+          px: 2,
+          py: 1.5,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          gap: 1.5,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+        }}
+      >
+        <Typography variant="subtitle2" sx={{ fontWeight: 400 }}>
+          {selectMode ? 'Click a row to choose the prediction model' : 'Select models to compare, or click a row to view details'}
+        </Typography>
+        {!selectMode && (
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<CompareArrowsIcon />}
+            disabled={!canCompare}
+            onClick={handleCompare}
+          >
+            Compare selected ({selectedIds.length})
+          </Button>
+        )}
+      </Box>
+
+      {error ? (
+        <Box sx={{ px: 2, py: 4 }}>
+          <Typography variant="body2" color="error">{error}</Typography>
+        </Box>
+      ) : (
+        <DataGrid
+          rows={models}
+          columns={columns}
+          loading={loading}
+          density="compact"
+          autoHeight
+          hideFooter
+          checkboxSelection={!selectMode}
+          disableRowSelectionOnClick={!selectMode}
+          disableRowSelectionExcludeModel
+          rowSelectionModel={rowSelectionModel}
+          onRowSelectionModelChange={selectMode ? undefined : setSelectionModel}
+          onRowClick={handleRowClick}
+          sx={{
+            border: 0,
+            cursor: 'pointer',
+            '& .MuiDataGrid-columnHeaders': {
+              bgcolor: 'grey.50',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+            },
+            '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700, textAlign: 'left' },
+            '& .MuiDataGrid-row:hover': { bgcolor: 'action.hover' },
+            '& .MuiDataGrid-cell': { py: 0.75 },
+            '& .MuiDataGrid-cellContent': { justifyContent: 'flex-start' },
+          }}
+        />
+      )}
+    </Paper>
+  )
+
+  if (embedded) return content
+
   return (
     <main className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-6 lg:px-8">
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-        <Paper
-          elevation={0}
-          sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}
-        >
-          <Box
-            sx={{
-              px: 2,
-              py: 1.5,
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              display: 'flex',
-              gap: 1.5,
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-            }}
-          >
-            <Typography variant="subtitle2" sx={{ fontWeight: 400 }}>
-              Select models to compare, or click a row to view details
-            </Typography>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<CompareArrowsIcon />}
-              disabled={!canCompare}
-              onClick={handleCompare}
-            >
-              Compare selected ({selectedIds.length})
-            </Button>
-          </Box>
-
-          {error ? (
-            <Box sx={{ px: 2, py: 4 }}>
-              <Typography variant="body2" color="error">{error}</Typography>
-            </Box>
-          ) : (
-            <DataGrid
-              rows={models}
-              columns={columns}
-              loading={loading}
-              density="compact"
-              autoHeight
-              hideFooter
-              checkboxSelection
-              disableRowSelectionOnClick
-              disableRowSelectionExcludeModel
-              rowSelectionModel={selectionModel}
-              onRowSelectionModelChange={setSelectionModel}
-              onRowClick={(params: GridRowParams) => navigate(`/models/${params.row.id}`)}
-              sx={{
-                border: 0,
-                cursor: 'pointer',
-                '& .MuiDataGrid-columnHeaders': {
-                  bgcolor: 'grey.50',
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                },
-                '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700, textAlign: 'left' },
-                '& .MuiDataGrid-row:hover': { bgcolor: 'action.hover' },
-                '& .MuiDataGrid-cell': { py: 0.75 },
-                '& .MuiDataGrid-cellContent': { justifyContent: 'flex-start' },
-              }}
-            />
-          )}
-        </Paper>
+        {content}
       </Box>
     </main>
   )
