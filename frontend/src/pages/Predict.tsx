@@ -296,7 +296,7 @@ function Predict() {
 
       const changedFeatures = activeFeatures.filter((feature) => !sameModelValue(baselineFeatures[feature.key], scenarioFeatures[feature.key]))
       const predictUrl = `/api/models/${activeModel.id}/predict`
-      const [baseline, scenario, ...singleResults] = await Promise.all([
+      const predictionResults = await Promise.allSettled([
         postJson<PredictionResponse>(predictUrl, { features: baselineFeatures }),
         postJson<PredictionResponse>(predictUrl, { features: scenarioFeatures }),
         ...changedFeatures.map((feature) => postJson<PredictionResponse>(predictUrl, {
@@ -304,9 +304,20 @@ function Predict() {
         })),
       ])
 
+      const [baselineResult, scenarioResult, ...singleResults] = predictionResults
+      if (baselineResult.status === 'rejected' || scenarioResult.status === 'rejected') {
+        throw new Error('Core prediction failed')
+      }
+
+      const baseline = baselineResult.value
+      const scenario = scenarioResult.value
+
       const deltas = changedFeatures
         .map((feature, index) => {
-          const probability = singleResults[index].probability
+          const singleResult = singleResults[index]
+          if (singleResult?.status !== 'fulfilled') return null
+
+          const probability = singleResult.value.probability
           const reduction = baseline.probability - probability
           return {
             key: feature.key,
@@ -319,6 +330,7 @@ function Predict() {
             globalImportance: importanceByFeature[feature.key] ?? 0,
           }
         })
+        .filter((delta): delta is NonNullable<typeof delta> => delta !== null)
         .sort((left, right) => Math.abs(right.reduction) - Math.abs(left.reduction))
 
       setResult({ baseline, scenario, deltas })

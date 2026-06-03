@@ -1,4 +1,5 @@
 from pathlib import Path
+import threading
 import json
 import joblib
 import numpy as np
@@ -17,11 +18,16 @@ PROJECT_ROOT = BASE_DIR.parent
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
 _model_cache: dict[str, object] = {}
+_model_cache_lock = threading.Lock()
 
 def _load_model(model_id: str):
-    if model_id not in _model_cache:
-        _model_cache[model_id] = joblib.load(get_model_path(model_id))
-    return _model_cache[model_id]
+    if model_id in _model_cache:
+        return _model_cache[model_id]
+
+    with _model_cache_lock:
+        if model_id not in _model_cache:
+            _model_cache[model_id] = joblib.load(get_model_path(model_id))
+        return _model_cache[model_id]
 
 def _display(value):
     if value is None:

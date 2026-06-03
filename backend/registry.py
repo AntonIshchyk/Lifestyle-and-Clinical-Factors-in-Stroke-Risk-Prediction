@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -35,6 +36,11 @@ def _ensure_schema(con: sqlite3.Connection):
     """)
 
 def register_dataset(name: str, df: pd.DataFrame, label: str | None = None):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        raise ValueError(
+            f"Dataset name '{name}' contains invalid characters. Use only letters, digits, underscores, and hyphens."
+        )
+
     table_name = f"dataset__{name}"
     with _connect() as con:
         _ensure_schema(con)
