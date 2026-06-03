@@ -1,0 +1,108 @@
+import json
+import re
+import sqlite3
+from pathlib import Path
+
+import pandas as pd
+
+DB_PATH = Path(__file__).resolve().parent / "healthcare.db"
+
+def _connect():
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
+
+def _ensure_schema(con: sqlite3.Connection):
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS _registry (
+            id          TEXT PRIMARY KEY,
+            type        TEXT NOT NULL,
+            label       TEXT NOT NULL,
+            reference   TEXT NOT NULL,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS _model_results (
+            model_id              TEXT PRIMARY KEY,
+            algorithm             TEXT NOT NULL,
+            feature_set           TEXT NOT NULL,
+            metrics               TEXT NOT NULL,
+            classification_report TEXT NOT NULL,
+            confusion_matrix      TEXT NOT NULL,
+            feature_importances   TEXT NOT NULL,
+            roc_curve             TEXT NOT NULL,
+            feature_columns       TEXT NOT NULL
+        );
+    """)
+
+def register_dataset(name: str, df: pd.DataFrame, label: str | None = None):
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        raise ValueError(
+            f"Dataset name '{name}' contains invalid characters. Use only letters, digits, underscores, and hyphens."
+        )
+
+    table_name = f"dataset__{name}"
+    with _connect() as con:
+        _ensure_schema(con)
+        df.to_sql(table_name, con, if_exists="replace", index=False)
+        con.execute(
+            "INSERT OR REPLACE INTO _registry (id, type, label, reference) VALUES (?, 'dataset', ?, ?)",
+            (name, label or name, table_name),
+        )
+
+def load_dataset(name: str) -> pd.DataFrame:
+    with _connect() as con:
+        row = con.execute(
+            "SELECT reference FROM _registry WHERE id = ? AND type = 'dataset'", (name,)
+        ).fetchone()
+        if not row:
+            raise KeyError(f"Dataset '{name}' not found")
+        return pd.read_sql(f'SELECT * FROM "{row["reference"]}"', con)
+
+def register_model(
+    model_id: str,
+    algorithm: str,
+    feature_set: str,
+    model_path: str,
+    metrics: dict,
+    classification_report: dict,
+    confusion_matrix: dict,
+    feature_importances: list,
+    roc_curve: dict,
+    feature_columns: list,
+):
+    label = f"{algorithm.replace('_', ' ').title()} / {feature_set.title()}"
+    with _connect() as con:
+        _ensure_schema(con)
+        con.execute(
+            "INSERT OR REPLACE INTO _registry (id, type, label, reference) VALUES (?, 'model', ?, ?)",
+            (model_id, label, model_path),
+        )
+        con.execute(
+            """
+            INSERT OR REPLACE INTO _model_results
+                (model_id, algorithm, feature_set, metrics, classification_report,
+                 confusion_matrix, feature_importances, roc_curve, feature_columns)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                model_id,
+                algorithm,
+                feature_set,
+                json.dumps(metrics),
+                json.dumps(classification_report),
+                json.dumps(confusion_matrix),
+                json.dumps(feature_importances),
+                json.dumps(roc_curve),
+                json.dumps(feature_columns),
+            ),
+        )
+
+def get_model_path(model_id: str) -> str:
+    with _connect() as con:
+        row = con.execute(
+            "SELECT reference FROM _registry WHERE id = ? AND type = 'model'", (model_id,)
+        ).fetchone()
+        if not row:
+            raise KeyError(f"Model '{model_id}' not found")
+        return row["reference"]
