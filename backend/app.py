@@ -137,7 +137,7 @@ def api_predict(model_id: str):
         X = pd.DataFrame(
             [[features.get(column, np.nan) for column in feature_columns]],
             columns=feature_columns,
-        )
+        ).apply(pd.to_numeric, errors='coerce')
         classifier = _load_model(model_id)
         prediction = int(classifier.predict(X)[0])
         probability = float(classifier.predict_proba(X)[0][1])
