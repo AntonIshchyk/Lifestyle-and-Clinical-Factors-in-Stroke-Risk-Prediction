@@ -5,7 +5,7 @@ from collections import Counter
 import pandas as pd
 
 
-SHARED_COLS = [
+LIFESTYLE_COLS = [
     "_STATE",
     "MARITAL",
     "EDUCA",
@@ -15,13 +15,6 @@ SHARED_COLS = [
     "SOMALE",
     "SOFEMALE",
     "_URBSTAT",
-    "_RACE",
-    "_SEX",
-    "_AGE80",
-]
-
-
-LIFESTYLE_COLS = [
     "ECIGNOW3",
     "HIVRISK5",
     "ACEDEPRS",
@@ -65,6 +58,9 @@ CLINICAL_COLS = [
     "GENHLTH",
     "PHYSHLTH",
     "MENTHLTH",
+    "_RACE",
+    "_SEX",
+    "_AGE80",
     "PRIMINS2",
     "PERSDOC3",
     "CHECKUP1",
@@ -169,4 +165,3 @@ def build_feature_datasets(df: pd.DataFrame, target_col: str) -> dict[str, pd.Da
         "clinical": df[clinical_feature_cols + [target_col]],
         "combined": df[feature_columns + [target_col]],
     }
-
