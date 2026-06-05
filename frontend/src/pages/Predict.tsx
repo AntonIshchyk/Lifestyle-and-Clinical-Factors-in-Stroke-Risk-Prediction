@@ -17,8 +17,7 @@ import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-da
 import { useQuery } from '@tanstack/react-query'
 import SectionCard from '../components/SectionCard'
 import { fetchJson, postJson } from '../api'
-import { fetchModelDetail, pct, type ModelDetail } from '../modelData'
-import { ALGORITHM_LABELS, FEATURE_SET_LABELS } from '../modelMetadata'
+import { fetchModelDetail, modelLabel, pct, type ModelDetail } from '../modelData'
 import ModelComparison, { type ModelRow } from './ModelComparison'
 import Patients, { type PatientSelection, type RegistryItem } from './Patients'
 
@@ -427,7 +426,7 @@ function Predict() {
         <Box sx={{ mb: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 1.5 }}>
           <Box>
             <Typography variant="caption" color="text.secondary">Model</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedModelSummary ? `${ALGORITHM_LABELS[selectedModelSummary.algorithm]} - ${FEATURE_SET_LABELS[selectedModelSummary.featureSet]}` : '-'}</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedModelSummary ? modelLabel(selectedModelSummary) : '-'}</Typography>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary">Dataset</Typography>
@@ -514,7 +513,7 @@ function Predict() {
             ))}
           </Stepper>
           <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
-            <Chip size="small" label={selectedModelSummary ? `${ALGORITHM_LABELS[selectedModelSummary.algorithm]} / ${FEATURE_SET_LABELS[selectedModelSummary.featureSet]}` : 'No model selected'} />
+            <Chip size="small" label={selectedModelSummary ? modelLabel(selectedModelSummary) : 'No model selected'} />
             <Chip size="small" label={activePatient ? `Patient ${selectedPatientNumber}` : 'No patient selected'} />
             <Chip size="small" label={`${activeFeatures.length} features selected`} />
           </Box>
