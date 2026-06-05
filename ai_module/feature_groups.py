@@ -22,6 +22,9 @@ SHARED_COLS = [
     "PHYSHLTH",
     "MENTHLTH",
     "_BMI5",
+    "PRIMINS2",
+    "PERSDOC3",
+    "PREGNANT",
 ]
 
 
@@ -66,8 +69,6 @@ LIFESTYLE_COLS = [
 
 
 CLINICAL_COLS = [
-    "PRIMINS2",
-    "PERSDOC3",
     "CHECKUP1",
     "LASTDEN4",
     "RMVTETH4",
@@ -80,7 +81,6 @@ CLINICAL_COLS = [
     "HAVARTH4",
     "DIABETE4",
     "DIABAGE4",
-    "PREGNANT",
     "DEAF",
     "BLIND",
     "DECIDE",
