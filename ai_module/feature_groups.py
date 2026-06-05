@@ -134,7 +134,7 @@ def _ordered(feature_columns: list[str], selected_columns: list[str]) -> list[st
 
 def _validate_feature_groups(feature_columns: list[str]) -> None:
     expected = set(feature_columns)
-    grouped = SHARED_COLS + LIFESTYLE_COLS + CLINICAL_COLS
+    grouped = LIFESTYLE_COLS + CLINICAL_COLS
     grouped_set = set(grouped)
 
     duplicate_cols = sorted(column for column, count in Counter(grouped).items() if count > 1)
@@ -157,8 +157,8 @@ def build_feature_datasets(df: pd.DataFrame, target_col: str) -> dict[str, pd.Da
     feature_columns = [column for column in df.columns if column != target_col]
     _validate_feature_groups(feature_columns)
 
-    lifestyle_feature_cols = _ordered(feature_columns, LIFESTYLE_COLS + SHARED_COLS)
-    clinical_feature_cols = _ordered(feature_columns, CLINICAL_COLS + SHARED_COLS)
+    lifestyle_feature_cols = _ordered(feature_columns, LIFESTYLE_COLS)
+    clinical_feature_cols = _ordered(feature_columns, CLINICAL_COLS)
 
     return {
         "lifestyle": df[lifestyle_feature_cols + [target_col]],
