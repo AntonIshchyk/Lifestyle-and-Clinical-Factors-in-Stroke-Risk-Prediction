@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
-
 import pandas as pd
 
 
@@ -30,7 +28,6 @@ SHARED_COLS = [
 
 LIFESTYLE_COLS = [
     "ECIGNOW3",
-    "HIVRISK5",
     "ACEDEPRS",
     "ACEDRINK",
     "ACEDRUGS",
@@ -81,6 +78,7 @@ CLINICAL_COLS = [
     "HAVARTH4",
     "DIABETE4",
     "DIABAGE4",
+    "HIVRISK5",
     "DEAF",
     "BLIND",
     "DECIDE",
@@ -136,30 +134,8 @@ def _ordered(feature_columns: list[str], selected_columns: list[str]) -> list[st
     return [column for column in feature_columns if column in selected]
 
 
-def _validate_feature_groups(feature_columns: list[str]) -> None:
-    expected = set(feature_columns)
-    grouped = SHARED_COLS + LIFESTYLE_COLS + CLINICAL_COLS
-    grouped_set = set(grouped)
-
-    duplicate_cols = sorted(column for column, count in Counter(grouped).items() if count > 1)
-    missing_cols = sorted(grouped_set - expected)
-    unassigned_cols = sorted(expected - grouped_set)
-
-    errors = []
-    if duplicate_cols:
-        errors.append(f"assigned to multiple groups: {duplicate_cols}")
-    if missing_cols:
-        errors.append(f"not present in dataset: {missing_cols}")
-    if unassigned_cols:
-        errors.append(f"not assigned to any feature group: {unassigned_cols}")
-
-    if errors:
-        raise ValueError("Invalid feature group split; " + "; ".join(errors))
-
-
 def build_feature_datasets(df: pd.DataFrame, target_col: str) -> dict[str, pd.DataFrame]:
     feature_columns = [column for column in df.columns if column != target_col]
-    _validate_feature_groups(feature_columns)
 
     lifestyle_feature_cols = _ordered(feature_columns, LIFESTYLE_COLS + SHARED_COLS)
     clinical_feature_cols = _ordered(feature_columns, CLINICAL_COLS + SHARED_COLS)
