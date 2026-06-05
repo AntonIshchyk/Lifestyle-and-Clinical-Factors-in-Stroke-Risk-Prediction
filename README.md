@@ -8,7 +8,11 @@ pip install -r requirements.txt
 
 2. Run the notebook to generate the datasets and models
 
-Open `ai_module/main.ipynb` in VS Code or Jupyter and run all cells from top to bottom.
+Open `ai_module/main.ipynb` in VS Code or Jupyter and run all cells from top to bottom or use:
+
+```bash
+jupyter nbconvert --to script main.ipynb --stdout | python
+```
 
 3. Install frontend dependencies (once)
 
