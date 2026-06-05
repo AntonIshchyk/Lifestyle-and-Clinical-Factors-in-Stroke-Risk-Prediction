@@ -18,6 +18,9 @@ SHARED_COLS = [
     "_RACE",
     "_SEX",
     "_AGE80",
+    "GENHLTH",
+    "PHYSHLTH",
+    "MENTHLTH",
 ]
 
 
@@ -62,9 +65,6 @@ LIFESTYLE_COLS = [
 
 
 CLINICAL_COLS = [
-    "GENHLTH",
-    "PHYSHLTH",
-    "MENTHLTH",
     "PRIMINS2",
     "PERSDOC3",
     "CHECKUP1",
