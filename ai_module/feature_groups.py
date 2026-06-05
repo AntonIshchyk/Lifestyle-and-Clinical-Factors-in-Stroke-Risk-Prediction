@@ -21,6 +21,7 @@ SHARED_COLS = [
     "GENHLTH",
     "PHYSHLTH",
     "MENTHLTH",
+    "_BMI5",
 ]
 
 
@@ -125,7 +126,6 @@ CLINICAL_COLS = [
     "CDSOCIA1",
     "_MICHD",
     "_ASTHMS1",
-    "_BMI5",
     "_LCSELIG",
     "_LCSCTSN",
 ]
