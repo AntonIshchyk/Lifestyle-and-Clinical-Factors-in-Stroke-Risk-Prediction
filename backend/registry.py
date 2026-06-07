@@ -26,6 +26,7 @@ def _ensure_schema(con: sqlite3.Connection):
             model_id              TEXT PRIMARY KEY,
             algorithm             TEXT NOT NULL,
             feature_set           TEXT NOT NULL,
+            uncertainty_variant   TEXT NOT NULL,
             metrics               TEXT NOT NULL,
             classification_report TEXT NOT NULL,
             confusion_matrix      TEXT NOT NULL,
@@ -63,6 +64,7 @@ def register_model(
     model_id: str,
     algorithm: str,
     feature_set: str,
+    uncertainty_variant: str,
     model_path: str,
     metrics: dict,
     classification_report: dict,
@@ -71,7 +73,10 @@ def register_model(
     roc_curve: dict,
     feature_columns: list,
 ):
-    label = f"{algorithm.replace('_', ' ').title()} / {feature_set.title()}"
+    label = (
+        f"{algorithm.replace('_', ' ').title()} / {feature_set.title()} / "
+        f"{uncertainty_variant.replace('_', ' ').title()}"
+    )
     with _connect() as con:
         _ensure_schema(con)
         con.execute(
@@ -81,14 +86,15 @@ def register_model(
         con.execute(
             """
             INSERT OR REPLACE INTO _model_results
-                (model_id, algorithm, feature_set, metrics, classification_report,
+                (model_id, algorithm, feature_set, uncertainty_variant, metrics, classification_report,
                  confusion_matrix, feature_importances, roc_curve, feature_columns)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 model_id,
                 algorithm,
                 feature_set,
+                uncertainty_variant,
                 json.dumps(metrics),
                 json.dumps(classification_report),
                 json.dumps(confusion_matrix),

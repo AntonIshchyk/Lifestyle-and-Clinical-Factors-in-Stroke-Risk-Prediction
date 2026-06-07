@@ -8,13 +8,21 @@ import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
 import { DataGrid, type GridColDef, type GridRowParams, type GridRowSelectionModel } from '@mui/x-data-grid'
 import { useQuery } from '@tanstack/react-query'
 import { fetchJson } from '../api'
-import { ALGORITHM_LABELS, FEATURE_SET_LABELS, type Algorithm, type FeatureSet } from '../modelMetadata'
+import {
+  ALGORITHM_LABELS,
+  FEATURE_SET_LABELS,
+  UNCERTAINTY_VARIANT_LABELS,
+  type Algorithm,
+  type FeatureSet,
+  type UncertaintyVariant,
+} from '../modelMetadata'
 import { pct } from '../modelData'
 
 export type ModelRow = {
   id: string
   algorithm: Algorithm
   featureSet: FeatureSet
+  uncertaintyVariant: UncertaintyVariant
   auc: number
   accuracy: number
   f1: number
@@ -50,6 +58,14 @@ function useColumns(): GridColDef[] {
       minWidth: 120,
       sortable: true,
       renderCell: ({ value }) => <Typography variant="body2">{FEATURE_SET_LABELS[value as FeatureSet]}</Typography>,
+    },
+    {
+      field: 'uncertaintyVariant',
+      headerName: 'Uncertainty',
+      flex: 1.2,
+      minWidth: 180,
+      sortable: true,
+      renderCell: ({ value }) => <Typography variant="body2">{UNCERTAINTY_VARIANT_LABELS[value as UncertaintyVariant]}</Typography>,
     },
     {
       field: 'auc',
