@@ -17,8 +17,7 @@ import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-da
 import { useQuery } from '@tanstack/react-query'
 import SectionCard from '../components/SectionCard'
 import { fetchJson, postJson } from '../api'
-import { fetchModelDetail, pct, type ModelDetail } from '../modelData'
-import { ALGORITHM_LABELS, FEATURE_SET_LABELS } from '../modelMetadata'
+import { fetchModelDetail, modelLabel, pct, type ModelDetail } from '../modelData'
 import ModelComparison, { type ModelRow } from './ModelComparison'
 import Patients, { type PatientSelection, type RegistryItem } from './Patients'
 
@@ -110,12 +109,12 @@ const FEATURE_OVERRIDES: Record<string, Partial<LabFeature>> = {
     kind: 'number',
     toDisplay: (value) => {
       if (value === null || value >= 99900) return ''
-      const drinks = Math.max(0, value / 100)
+      const drinks = Math.max(0, value)
       return Number.isInteger(drinks) ? String(drinks) : drinks.toFixed(2)
     },
     toModel: (value) => {
       if (value.trim() === '') return null
-      return Math.max(0, Number(value)) * 100
+      return Math.max(0, Number(value))
     },
   },
   _BMI5: {
@@ -123,10 +122,10 @@ const FEATURE_OVERRIDES: Record<string, Partial<LabFeature>> = {
     label: 'BMI',
     helper: 'BRFSS _BMI5, displayed as BMI',
     kind: 'number',
-    toDisplay: (value) => (value === null ? '' : (value / 100).toFixed(1)),
+    toDisplay: (value) => (value === null ? '' : (value).toFixed(1)),
     toModel: (value) => {
       if (value.trim() === '') return null
-      return Math.max(0, Number(value)) * 100
+      return Math.max(0, Number(value))
     },
   },
 }
@@ -481,7 +480,7 @@ function Predict() {
         <Box sx={{ mb: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 1.5 }}>
           <Box>
             <Typography variant="caption" color="text.secondary">Model</Typography>
-            <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedModelSummary ? `${ALGORITHM_LABELS[selectedModelSummary.algorithm]} - ${FEATURE_SET_LABELS[selectedModelSummary.featureSet]}` : '-'}</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 700 }}>{selectedModelSummary ? modelLabel(selectedModelSummary) : '-'}</Typography>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary">Dataset</Typography>
@@ -568,7 +567,7 @@ function Predict() {
             ))}
           </Stepper>
           <Box sx={{ mt: 2, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
-            <Chip size="small" label={selectedModelSummary ? `${ALGORITHM_LABELS[selectedModelSummary.algorithm]} / ${FEATURE_SET_LABELS[selectedModelSummary.featureSet]}` : 'No model selected'} />
+            <Chip size="small" label={selectedModelSummary ? modelLabel(selectedModelSummary) : 'No model selected'} />
             <Chip size="small" label={activePatient ? `Patient ${selectedPatientNumber}` : 'No patient selected'} />
             <Chip size="small" label={`${activeFeatures.length} features selected`} />
           </Box>

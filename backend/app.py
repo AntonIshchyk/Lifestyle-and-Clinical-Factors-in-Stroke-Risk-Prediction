@@ -100,7 +100,7 @@ def api_data(name: str):
 def api_models():
     with _connect() as con:
         rows = con.execute(
-            "SELECT model_id, algorithm, feature_set, metrics FROM _model_results"
+            "SELECT model_id, algorithm, feature_set, uncertainty_variant, metrics FROM _model_results"
         ).fetchall()
 
     models = []
@@ -110,6 +110,7 @@ def api_models():
             "id": row["model_id"],
             "algorithm": row["algorithm"],
             "featureSet": row["feature_set"],
+            "uncertaintyVariant": row["uncertainty_variant"],
             **metrics,
         })
     return jsonify(models)
@@ -129,6 +130,7 @@ def api_model_detail(model_id: str):
         "id": model_id,
         "algorithm": row["algorithm"],
         "featureSet": row["feature_set"],
+        "uncertaintyVariant": row["uncertainty_variant"],
         "auc": metrics["auc"],
         "classificationReport": json.loads(row["classification_report"]),
         "confusionMatrix": json.loads(row["confusion_matrix"]),
