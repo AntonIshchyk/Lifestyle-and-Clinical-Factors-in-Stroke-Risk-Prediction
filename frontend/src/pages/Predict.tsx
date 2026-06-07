@@ -114,7 +114,7 @@ const FEATURE_OVERRIDES: Record<string, Partial<LabFeature>> = {
     },
     toModel: (value) => {
       if (value.trim() === '') return null
-      return Math.max(0, Number(value)) * 100
+      return Math.max(0, Number(value))
     },
   },
   _BMI5: {
@@ -125,7 +125,7 @@ const FEATURE_OVERRIDES: Record<string, Partial<LabFeature>> = {
     toDisplay: (value) => (value === null ? '' : (value / 100).toFixed(1)),
     toModel: (value) => {
       if (value.trim() === '') return null
-      return Math.max(0, Number(value)) * 100
+      return Math.max(0, Number(value))
     },
   },
 }
