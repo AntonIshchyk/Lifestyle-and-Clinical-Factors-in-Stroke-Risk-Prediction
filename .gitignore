@@ -64,6 +64,8 @@ db.sqlite3-journal
 # Flask stuff:
 instance/
 .webassets-cache
+backend/healthcare.db
+ai_module/models/
 
 # Scrapy stuff:
 .scrapy

@@ -27,6 +27,31 @@ type PredictionResponse = {
   label: string
 }
 
+type PredictionLogPayload = {
+  modelId: string
+  patient: {
+    datasetId: string
+    datasetLabel: string
+    rowId: string
+    rowIndex: number
+    absoluteIndex: number
+    page: number
+    perPage: number
+    row: Record<string, string>
+  }
+  selectedFeatures: { key: string; label: string }[]
+  baselineFeatures: Record<string, number | null>
+  scenarioFeatures: Record<string, number | null>
+  baseline: PredictionResponse
+  scenario: PredictionResponse
+  changedFeatures: {
+    key: string
+    label: string
+    before: number | null
+    after: number | null
+  }[]
+}
+
 type LabFeature = {
   key: string
   label: string
@@ -333,6 +358,35 @@ function Predict() {
         .sort((left, right) => Math.abs(right.reduction) - Math.abs(left.reduction))
 
       setResult({ baseline, scenario, deltas })
+
+      if (selectedPatient) {
+        const logPayload: PredictionLogPayload = {
+          modelId: activeModel.id,
+          patient: {
+            datasetId: selectedPatient.datasetId,
+            datasetLabel: selectedPatient.datasetLabel,
+            rowId: selectedPatient.rowId,
+            rowIndex: selectedPatient.rowIndex,
+            absoluteIndex: selectedPatient.absoluteIndex,
+            page: selectedPatient.page,
+            perPage: selectedPatient.perPage,
+            row: selectedPatient.row,
+          },
+          selectedFeatures: activeFeatures.map((feature) => ({ key: feature.key, label: feature.label })),
+          baselineFeatures,
+          scenarioFeatures,
+          baseline,
+          scenario,
+          changedFeatures: deltas.map((delta) => ({
+            key: delta.key,
+            label: delta.label,
+            before: delta.before,
+            after: delta.after,
+          })),
+        }
+
+        void postJson<{ ok: boolean }>('/api/predictions/log', logPayload).catch(() => undefined)
+      }
     } catch {
       setPredictError('Prediction failed. Check that the backend is running and the entered values are valid.')
     } finally {
