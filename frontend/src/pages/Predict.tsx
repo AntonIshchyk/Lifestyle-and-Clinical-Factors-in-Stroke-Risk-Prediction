@@ -109,7 +109,7 @@ const FEATURE_OVERRIDES: Record<string, Partial<LabFeature>> = {
     kind: 'number',
     toDisplay: (value) => {
       if (value === null || value >= 99900) return ''
-      const drinks = Math.max(0, value / 100)
+      const drinks = Math.max(0, value)
       return Number.isInteger(drinks) ? String(drinks) : drinks.toFixed(2)
     },
     toModel: (value) => {
@@ -122,7 +122,7 @@ const FEATURE_OVERRIDES: Record<string, Partial<LabFeature>> = {
     label: 'BMI',
     helper: 'BRFSS _BMI5, displayed as BMI',
     kind: 'number',
-    toDisplay: (value) => (value === null ? '' : (value / 100).toFixed(1)),
+    toDisplay: (value) => (value === null ? '' : (value).toFixed(1)),
     toModel: (value) => {
       if (value.trim() === '') return null
       return Math.max(0, Number(value))
