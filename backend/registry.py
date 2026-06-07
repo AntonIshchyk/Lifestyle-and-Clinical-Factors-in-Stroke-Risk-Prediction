@@ -35,6 +35,15 @@ def _ensure_schema(con: sqlite3.Connection):
             feature_columns       TEXT NOT NULL
         );
     """)
+    model_result_columns = {
+        row["name"] if isinstance(row, sqlite3.Row) else row[1]
+        for row in con.execute("PRAGMA table_info(_model_results)")
+    }
+    if "uncertainty_variant" not in model_result_columns:
+        con.execute(
+            "ALTER TABLE _model_results "
+            "ADD COLUMN uncertainty_variant TEXT NOT NULL DEFAULT 'with_uncertain'"
+        )
 
 def register_dataset(name: str, df: pd.DataFrame, label: str | None = None):
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
