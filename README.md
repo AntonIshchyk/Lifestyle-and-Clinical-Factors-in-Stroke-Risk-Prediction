@@ -6,6 +6,10 @@
 pip install -r requirements.txt
 ```
 
+GPU training is enabled in `ai_module/main.ipynb` for XGBoost and LightGBM.
+If GPU training fails, check that your NVIDIA drivers/CUDA setup are available
+for XGBoost and that LightGBM was installed with GPU support.
+
 2. Run the notebook to generate the datasets and models
 
 Open `ai_module/main.ipynb` in VS Code or Jupyter and run all cells from top to bottom or use:
