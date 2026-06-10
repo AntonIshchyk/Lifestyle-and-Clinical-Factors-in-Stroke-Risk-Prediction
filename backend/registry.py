@@ -36,15 +36,6 @@ def _ensure_schema(con: sqlite3.Connection):
             feature_columns       TEXT NOT NULL
         );
     """)
-    columns = {
-        row["name"]
-        for row in con.execute('PRAGMA table_info("_model_results")').fetchall()
-    }
-    if "balancing_method" not in columns:
-        con.execute(
-            "ALTER TABLE _model_results "
-            "ADD COLUMN balancing_method TEXT NOT NULL DEFAULT 'random_oversampling'"
-        )
 
 def register_dataset(name: str, df: pd.DataFrame, label: str | None = None):
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
