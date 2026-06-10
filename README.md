@@ -18,6 +18,9 @@ Open `ai_module/main.ipynb` in VS Code or Jupyter and run all cells from top to 
 jupyter nbconvert --to script main.ipynb --stdout | python
 ```
 
+The training step registers random oversampling, SMOTE, SMOTENC, SMOTE-Tomek, and class-weighted model sets
+for each feature/uncertainty dataset variant.
+
 3. Install frontend dependencies (once)
 
 ```bash

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Chip from '@mui/material/Chip'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
@@ -10,9 +11,11 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchJson } from '../api'
 import {
   ALGORITHM_LABELS,
+  BALANCING_METHOD_LABELS,
   FEATURE_SET_LABELS,
   UNCERTAINTY_VARIANT_LABELS,
   type Algorithm,
+  type BalancingMethod,
   type FeatureSet,
   type UncertaintyVariant,
 } from '../modelMetadata'
@@ -23,6 +26,7 @@ export type ModelRow = {
   algorithm: Algorithm
   featureSet: FeatureSet
   uncertaintyVariant: UncertaintyVariant
+  balancingMethod: BalancingMethod
   auc: number
   accuracy: number
   f1: number
@@ -66,6 +70,21 @@ function useColumns(): GridColDef[] {
       minWidth: 180,
       sortable: true,
       renderCell: ({ value }) => <Typography variant="body2">{UNCERTAINTY_VARIANT_LABELS[value as UncertaintyVariant]}</Typography>,
+    },
+    {
+      field: 'balancingMethod',
+      headerName: 'Balance',
+      flex: 1.15,
+      minWidth: 155,
+      sortable: true,
+      renderCell: ({ value }) => (
+        <Chip
+          label={BALANCING_METHOD_LABELS[value as BalancingMethod]}
+          size="small"
+          variant="outlined"
+          sx={{ borderRadius: 1.5, height: 24 }}
+        />
+      ),
     },
     {
       field: 'auc',
@@ -118,6 +137,68 @@ function useColumns(): GridColDef[] {
       valueFormatter: (value) => pct(value as number),
     },
   ], [])
+}
+
+function ModelOverview({ models }: { models: ModelRow[] }) {
+  const summaries = useMemo(() => {
+    const methods = [...new Set(models.map((model) => model.balancingMethod))]
+      .sort((left, right) => {
+        const order: BalancingMethod[] = ['random_oversampling', 'smote', 'smotenc', 'smote_tomek', 'weighted']
+        return order.indexOf(left) - order.indexOf(right)
+      })
+
+    return methods.map((method) => {
+      const methodModels = models.filter((model) => model.balancingMethod === method)
+      const bestAuc = methodModels.reduce<ModelRow | null>(
+        (best, model) => (!best || model.auc > best.auc ? model : best),
+        null,
+      )
+      const bestF1 = methodModels.reduce<ModelRow | null>(
+        (best, model) => (!best || model.f1 > best.f1 ? model : best),
+        null,
+      )
+
+      return {
+        method,
+        label: BALANCING_METHOD_LABELS[method],
+        count: methodModels.length,
+        bestAuc,
+        bestF1,
+      }
+    })
+  }, [models])
+
+  return (
+    <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+      <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Model overview</Typography>
+      </Box>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' }, gap: 0, bgcolor: 'grey.50' }}>
+        {summaries.map((summary, index) => (
+          <Box key={summary.method} sx={{ p: 2, bgcolor: 'background.paper', borderRight: { md: index < summaries.length - 1 ? '1px solid' : 0 }, borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, mb: 1.5 }}>
+              <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 700 }}>{summary.label}</Typography>
+              <Chip label={`${summary.count} models`} size="small" sx={{ borderRadius: 1.5 }} />
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Best AUC-ROC</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {summary.bestAuc ? `${summary.bestAuc.auc.toFixed(3)} - ${ALGORITHM_LABELS[summary.bestAuc.algorithm]}` : '-'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">Best F1</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {summary.bestF1 ? `${summary.bestF1.f1.toFixed(3)} - ${ALGORITHM_LABELS[summary.bestF1.algorithm]}` : '-'}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    </Paper>
+  )
 }
 
 function ModelComparison({
@@ -236,6 +317,7 @@ function ModelComparison({
   return (
     <main className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-6 lg:px-8">
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        <ModelOverview models={models} />
         {content}
       </Box>
     </main>

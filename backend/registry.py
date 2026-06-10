@@ -27,6 +27,7 @@ def _ensure_schema(con: sqlite3.Connection):
             algorithm             TEXT NOT NULL,
             feature_set           TEXT NOT NULL,
             uncertainty_variant   TEXT NOT NULL,
+            balancing_method      TEXT NOT NULL DEFAULT 'random_oversampling',
             metrics               TEXT NOT NULL,
             classification_report TEXT NOT NULL,
             confusion_matrix      TEXT NOT NULL,
@@ -35,6 +36,15 @@ def _ensure_schema(con: sqlite3.Connection):
             feature_columns       TEXT NOT NULL
         );
     """)
+    columns = {
+        row["name"]
+        for row in con.execute('PRAGMA table_info("_model_results")').fetchall()
+    }
+    if "balancing_method" not in columns:
+        con.execute(
+            "ALTER TABLE _model_results "
+            "ADD COLUMN balancing_method TEXT NOT NULL DEFAULT 'random_oversampling'"
+        )
 
 def register_dataset(name: str, df: pd.DataFrame, label: str | None = None):
     if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
@@ -60,6 +70,12 @@ def load_dataset(name: str) -> pd.DataFrame:
             raise KeyError(f"Dataset '{name}' not found")
         return pd.read_sql(f'SELECT * FROM "{row["reference"]}"', con)
 
+def clear_registered_models():
+    with _connect() as con:
+        _ensure_schema(con)
+        con.execute("DELETE FROM _model_results")
+        con.execute("DELETE FROM _registry WHERE type = 'model'")
+
 def register_model(
     model_id: str,
     algorithm: str,
@@ -72,10 +88,12 @@ def register_model(
     feature_importances: list,
     roc_curve: dict,
     feature_columns: list,
+    balancing_method: str = "random_oversampling",
 ):
     label = (
         f"{algorithm.replace('_', ' ').title()} / {feature_set.title()} / "
-        f"{uncertainty_variant.replace('_', ' ').title()}"
+        f"{uncertainty_variant.replace('_', ' ').title()} / "
+        f"{balancing_method.replace('_', ' ').title()}"
     )
     with _connect() as con:
         _ensure_schema(con)
@@ -86,15 +104,17 @@ def register_model(
         con.execute(
             """
             INSERT OR REPLACE INTO _model_results
-                (model_id, algorithm, feature_set, uncertainty_variant, metrics, classification_report,
+                (model_id, algorithm, feature_set, uncertainty_variant, balancing_method,
+                 metrics, classification_report,
                  confusion_matrix, feature_importances, roc_curve, feature_columns)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 model_id,
                 algorithm,
                 feature_set,
                 uncertainty_variant,
+                balancing_method,
                 json.dumps(metrics),
                 json.dumps(classification_report),
                 json.dumps(confusion_matrix),

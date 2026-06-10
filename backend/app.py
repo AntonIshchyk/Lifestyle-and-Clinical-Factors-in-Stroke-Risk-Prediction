@@ -8,9 +8,9 @@ import pandas as pd
 from flask import Flask, abort, jsonify, request, send_from_directory
 
 try:
-    from .registry import _connect, get_model_path
+    from .registry import _connect, _ensure_schema, get_model_path
 except ImportError:
-    from registry import _connect, get_model_path
+    from registry import _connect, _ensure_schema, get_model_path
 
 app = Flask(__name__)
 
@@ -99,8 +99,9 @@ def api_data(name: str):
 @app.route("/api/models")
 def api_models():
     with _connect() as con:
+        _ensure_schema(con)
         rows = con.execute(
-            "SELECT model_id, algorithm, feature_set, uncertainty_variant, metrics FROM _model_results"
+            "SELECT model_id, algorithm, feature_set, uncertainty_variant, balancing_method, metrics FROM _model_results"
         ).fetchall()
 
     models = []
@@ -111,6 +112,7 @@ def api_models():
             "algorithm": row["algorithm"],
             "featureSet": row["feature_set"],
             "uncertaintyVariant": row["uncertainty_variant"],
+            "balancingMethod": row["balancing_method"],
             **metrics,
         })
     return jsonify(models)
@@ -118,6 +120,7 @@ def api_models():
 @app.route("/api/models/<model_id>")
 def api_model_detail(model_id: str):
     with _connect() as con:
+        _ensure_schema(con)
         row = con.execute(
             "SELECT * FROM _model_results WHERE model_id = ?",
             (model_id,),
@@ -131,6 +134,7 @@ def api_model_detail(model_id: str):
         "algorithm": row["algorithm"],
         "featureSet": row["feature_set"],
         "uncertaintyVariant": row["uncertainty_variant"],
+        "balancingMethod": row["balancing_method"],
         "auc": metrics["auc"],
         "classificationReport": json.loads(row["classification_report"]),
         "confusionMatrix": json.loads(row["confusion_matrix"]),
@@ -147,6 +151,7 @@ def api_predict(model_id: str):
         abort(400, description="'features' dict required in request body")
 
     with _connect() as con:
+        _ensure_schema(con)
         row = con.execute(
             "SELECT feature_columns FROM _model_results WHERE model_id = ?",
             (model_id,),
@@ -182,8 +187,9 @@ def api_prediction_log():
         abort(400, description="'modelId' required in request body")
 
     with _connect() as con:
+        _ensure_schema(con)
         row = con.execute(
-            "SELECT algorithm, feature_set, metrics, feature_columns FROM _model_results WHERE model_id = ?",
+            "SELECT algorithm, feature_set, balancing_method, metrics, feature_columns FROM _model_results WHERE model_id = ?",
             (model_id,),
         ).fetchone()
     if not row:
@@ -204,12 +210,13 @@ def api_prediction_log():
             "id": model_id,
             "algorithm": row["algorithm"],
             "featureSet": row["feature_set"],
+            "balancingMethod": row["balancing_method"],
             "metrics": {
                 "auc": metrics.get("auc"),
                 "accuracy": metrics.get("accuracy"),
                 "precision": metrics.get("precision"),
                 "recall": metrics.get("recall"),
-                "f1Score": metrics.get("f1-score") or metrics.get("f1_score"),
+                "f1Score": metrics.get("f1") or metrics.get("f1-score") or metrics.get("f1_score"),
             },
         },
         "patient": body.get("patient") or {},
