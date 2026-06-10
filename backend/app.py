@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 import threading
 import json
+import uuid
 import joblib
 import numpy as np
 import pandas as pd
@@ -9,8 +10,10 @@ from flask import Flask, abort, jsonify, request, send_from_directory
 
 try:
     from .registry import _connect, _ensure_schema, get_model_path
+    from .training import ALGORITHMS, BALANCING_STRATEGIES, parse_dataset_id, train_model
 except ImportError:
     from registry import _connect, _ensure_schema, get_model_path
+    from training import ALGORITHMS, BALANCING_STRATEGIES, parse_dataset_id, train_model
 
 app = Flask(__name__)
 
@@ -20,8 +23,10 @@ FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 PREDICTION_LOG_PATH = BASE_DIR / "prediction_log.txt"
 
 _model_cache: dict[str, object] = {}
+_training_jobs: dict[str, dict[str, object]] = {}
 _model_cache_lock = threading.Lock()
 _prediction_log_lock = threading.Lock()
+_training_jobs_lock = threading.Lock()
 
 def _load_model(model_id: str):
     if model_id in _model_cache:
@@ -55,6 +60,138 @@ def _append_prediction_log(entry: dict):
                 handle.write("\n")
             handle.write(payload)
             handle.write("\n---\n")
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _public_job(job: dict[str, object]):
+    return {key: value for key, value in job.items() if key != "thread"}
+
+
+def _set_job(job_id: str, **updates):
+    with _training_jobs_lock:
+        job = _training_jobs[job_id]
+        job.update(updates)
+        return _public_job(job)
+
+
+def _request_list(body: dict[str, object], plural_key: str, singular_key: str):
+    value = body.get(plural_key, body.get(singular_key, []))
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item)]
+    if value:
+        return [str(value)]
+    return []
+
+
+def _model_id(algorithm: str, dataset_id: str, balancing_method: str):
+    return f"{algorithm}_{balancing_method}_{dataset_id}"
+
+
+def _dataset_options():
+    with _connect() as con:
+        _ensure_schema(con)
+        rows = con.execute(
+            "SELECT id, label FROM _registry WHERE type = 'dataset' ORDER BY id"
+        ).fetchall()
+
+    datasets = []
+    for row in rows:
+        try:
+            feature_set, uncertainty_variant = parse_dataset_id(row["id"])
+        except ValueError:
+            feature_set, uncertainty_variant = "", ""
+        datasets.append({
+            "id": row["id"],
+            "label": row["label"],
+            "featureSet": feature_set,
+            "uncertaintyVariant": uncertainty_variant,
+        })
+    return datasets
+
+
+def _expected_model_specs(datasets: list[dict[str, str]]):
+    return [
+        {
+            "id": _model_id(algorithm, dataset["id"], balancing_method),
+            "algorithm": algorithm,
+            "datasetId": dataset["id"],
+            "featureSet": dataset["featureSet"],
+            "uncertaintyVariant": dataset["uncertaintyVariant"],
+            "balancingMethod": balancing_method,
+        }
+        for dataset in datasets
+        for balancing_method in BALANCING_STRATEGIES.keys()
+        for algorithm in ALGORITHMS.keys()
+    ]
+
+
+def _run_training_job(job_id: str, payload: dict[str, object]):
+    _set_job(job_id, status="running", startedAt=_now_iso(), message="Training started.")
+    try:
+        results = []
+        combinations = payload.get("models") or [
+            {
+                "algorithm": algorithm,
+                "datasetId": dataset_id,
+                "balancingMethod": balancing_method,
+            }
+            for dataset_id in payload["datasetIds"]
+            for balancing_method in payload["balancingMethods"]
+            for algorithm in payload["algorithms"]
+        ]
+        total = len(combinations)
+        for index, spec in enumerate(combinations, start=1):
+            algorithm = spec["algorithm"]
+            dataset_id = spec["datasetId"]
+            balancing_method = spec["balancingMethod"]
+            _set_job(
+                job_id,
+                message=(
+                    f"Training {index}/{total}: "
+                    f"{algorithm} / {dataset_id} / {balancing_method}."
+                ),
+            )
+            result = train_model(
+                algorithm=algorithm,
+                dataset_id=dataset_id,
+                balancing_method=balancing_method,
+                target_ratio=payload["targetRatio"],
+                force_retrain=payload["forceRetrain"],
+                use_gpu=payload["useGpu"],
+            )
+            with _model_cache_lock:
+                _model_cache.pop(result["modelId"], None)
+            results.append(result)
+
+        reused = sum(1 for result in results if result["reusedExistingModel"])
+        result_payload = {
+            "models": results,
+            "total": total,
+            "trained": total - reused,
+            "reused": reused,
+        }
+        _set_job(
+            job_id,
+            status="succeeded",
+            finishedAt=_now_iso(),
+            message=(
+                "Existing models registered."
+                if reused == total
+                else "Training batch completed."
+            ),
+            result=result_payload,
+        )
+    except Exception as exc:
+        _set_job(
+            job_id,
+            status="failed",
+            finishedAt=_now_iso(),
+            message=str(exc),
+            error=str(exc),
+        )
 
 @app.route("/api/registry")
 def api_registry():
@@ -95,6 +232,178 @@ def api_data(name: str):
         "per_page": per_page,
         "total": total,
     })
+
+
+@app.route("/api/training/options")
+def api_training_options():
+    datasets = _dataset_options()
+
+    return jsonify({
+        "algorithms": [
+            {"id": algorithm_id, "label": label}
+            for algorithm_id, label in ALGORITHMS.items()
+        ],
+        "datasets": datasets,
+        "balancingMethods": [
+            {"id": balancing_id}
+            for balancing_id in BALANCING_STRATEGIES.keys()
+        ],
+        "defaults": {
+            "algorithms": ["xgboost"],
+            "datasetIds": [datasets[0]["id"]] if datasets else [],
+            "balancingMethods": ["random_oversampling"],
+            "targetRatio": 1.0,
+            "forceRetrain": False,
+            "useGpu": True,
+        },
+    })
+
+
+@app.route("/api/training/coverage")
+def api_training_coverage():
+    datasets = _dataset_options()
+    expected = _expected_model_specs(datasets)
+    with _connect() as con:
+        _ensure_schema(con)
+        rows = con.execute(
+            "SELECT model_id FROM _model_results"
+        ).fetchall()
+    registered_model_ids = {row["model_id"] for row in rows}
+    available = [
+        spec for spec in expected if spec["id"] in registered_model_ids
+    ]
+    missing = [
+        spec for spec in expected if spec["id"] not in registered_model_ids
+    ]
+
+    missing_by_dataset = {}
+    missing_by_algorithm = {}
+    missing_by_balancing_method = {}
+    for spec in missing:
+        missing_by_dataset[spec["datasetId"]] = missing_by_dataset.get(spec["datasetId"], 0) + 1
+        missing_by_algorithm[spec["algorithm"]] = missing_by_algorithm.get(spec["algorithm"], 0) + 1
+        missing_by_balancing_method[spec["balancingMethod"]] = missing_by_balancing_method.get(spec["balancingMethod"], 0) + 1
+
+    return jsonify({
+        "totalExpected": len(expected),
+        "availableCount": len(available),
+        "missingCount": len(missing),
+        "available": available,
+        "missing": missing,
+        "missingByDataset": missing_by_dataset,
+        "missingByAlgorithm": missing_by_algorithm,
+        "missingByBalancingMethod": missing_by_balancing_method,
+    })
+
+
+@app.route("/api/training/jobs", methods=["POST"])
+def api_start_training_job():
+    body = request.get_json(force=True) or {}
+    algorithms = _request_list(body, "algorithms", "algorithm")
+    dataset_ids = _request_list(body, "datasetIds", "datasetId")
+    balancing_methods = _request_list(body, "balancingMethods", "balancingMethod")
+    model_specs = body.get("models", [])
+    target_ratio = body.get("targetRatio", 1.0)
+    force_retrain = bool(body.get("forceRetrain", False))
+    use_gpu = bool(body.get("useGpu", True))
+
+    if model_specs:
+        if not isinstance(model_specs, list):
+            abort(400, description="'models' must be an array of model specs")
+        normalized_specs = []
+        for spec in model_specs:
+            if not isinstance(spec, dict):
+                abort(400, description="'models' must contain objects")
+            normalized_specs.append({
+                "algorithm": str(spec.get("algorithm", "")),
+                "datasetId": str(spec.get("datasetId", "")),
+                "balancingMethod": str(spec.get("balancingMethod", "")),
+            })
+        algorithms = sorted({spec["algorithm"] for spec in normalized_specs})
+        dataset_ids = sorted({spec["datasetId"] for spec in normalized_specs})
+        balancing_methods = sorted({spec["balancingMethod"] for spec in normalized_specs})
+    else:
+        normalized_specs = []
+
+    if not model_specs and not algorithms:
+        abort(400, description="'algorithms' must include at least one supported algorithm id")
+    if not model_specs and not dataset_ids:
+        abort(400, description="'datasetIds' must include at least one registered dataset id")
+    if not model_specs and not balancing_methods:
+        abort(400, description="'balancingMethods' must include at least one supported balancing method id")
+    invalid_algorithms = [algorithm for algorithm in algorithms if algorithm not in ALGORITHMS]
+    if invalid_algorithms:
+        abort(400, description=f"Unsupported algorithm id(s): {', '.join(invalid_algorithms)}")
+    invalid_balancing_methods = [
+        balancing_method
+        for balancing_method in balancing_methods
+        if balancing_method not in BALANCING_STRATEGIES
+    ]
+    if invalid_balancing_methods:
+        abort(400, description=f"Unsupported balancing method id(s): {', '.join(invalid_balancing_methods)}")
+    try:
+        target_ratio = float(target_ratio)
+    except (TypeError, ValueError):
+        abort(400, description="'targetRatio' must be a number")
+    if "weighted" in balancing_methods:
+        target_ratio = 1.0
+    if not 0 < target_ratio <= 1:
+        abort(400, description="'targetRatio' must be in the interval (0, 1]")
+
+    with _connect() as con:
+        _ensure_schema(con)
+        rows = con.execute(
+            "SELECT id FROM _registry WHERE type = 'dataset'",
+        ).fetchall()
+    registered_dataset_ids = {row["id"] for row in rows}
+    invalid_dataset_ids = [
+        dataset_id for dataset_id in dataset_ids if dataset_id not in registered_dataset_ids
+    ]
+    if invalid_dataset_ids:
+        abort(400, description=f"Unknown dataset id(s): {', '.join(invalid_dataset_ids)}")
+
+    payload = {
+        "algorithms": algorithms,
+        "datasetIds": dataset_ids,
+        "balancingMethods": balancing_methods,
+        "targetRatio": target_ratio,
+        "forceRetrain": force_retrain,
+        "useGpu": use_gpu,
+    }
+    if model_specs:
+        payload["models"] = normalized_specs
+    job_id = uuid.uuid4().hex
+    job = {
+        "id": job_id,
+        "status": "queued",
+        "message": "Training queued.",
+        "createdAt": _now_iso(),
+        "startedAt": None,
+        "finishedAt": None,
+        "request": payload,
+        "result": None,
+        "error": None,
+    }
+    thread = threading.Thread(
+        target=_run_training_job,
+        args=(job_id, payload),
+        daemon=True,
+    )
+    job["thread"] = thread
+    with _training_jobs_lock:
+        _training_jobs[job_id] = job
+    thread.start()
+
+    return jsonify(_public_job(job)), 202
+
+
+@app.route("/api/training/jobs/<job_id>")
+def api_training_job(job_id: str):
+    with _training_jobs_lock:
+        job = _training_jobs.get(job_id)
+        if not job:
+            abort(404, description=f"Training job '{job_id}' not found")
+        return jsonify(_public_job(job))
 
 @app.route("/api/models")
 def api_models():

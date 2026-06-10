@@ -1,7 +1,7 @@
 export type Algorithm = 'random_forest' | 'xgboost' | 'lightgbm'
 export type FeatureSet = 'lifestyle' | 'clinical' | 'combined'
 export type UncertaintyVariant = 'with_uncertain' | 'without_uncertain'
-export type BalancingMethod = 'random_oversampling' | 'smote' | 'smotenc' | 'smote_tomek' | 'weighted'
+export type BalancingMethod = 'random_oversampling' | 'smote' | 'smotenc' | 'weighted'
 
 export const ALGORITHM_LABELS: Record<Algorithm, string> = {
   random_forest: 'Random Forest',
@@ -24,6 +24,5 @@ export const BALANCING_METHOD_LABELS: Record<BalancingMethod, string> = {
   random_oversampling: 'Random oversampling',
   smote: 'SMOTE',
   smotenc: 'SMOTENC',
-  smote_tomek: 'SMOTE-Tomek',
   weighted: 'Class weighted',
 }
