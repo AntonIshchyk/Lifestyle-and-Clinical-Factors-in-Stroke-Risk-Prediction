@@ -21,6 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 PREDICTION_LOG_PATH = BASE_DIR / "prediction_log.txt"
+AI_MODULE_DIR = PROJECT_ROOT / "ai_module"
 
 _model_cache: dict[str, object] = {}
 _training_jobs: dict[str, dict[str, object]] = {}
@@ -88,6 +89,40 @@ def _request_list(body: dict[str, object], plural_key: str, singular_key: str):
 
 def _model_id(algorithm: str, dataset_id: str, balancing_method: str):
     return f"{algorithm}_{balancing_method}_{dataset_id}"
+
+
+def _is_tuned_model(model_id: str):
+    return "__tuned_" in model_id
+
+
+def _delete_model_file(model_path: str | None):
+    if not model_path:
+        return False
+
+    resolved_path = Path(model_path).resolve()
+    try:
+        resolved_path.relative_to(AI_MODULE_DIR.resolve())
+    except ValueError:
+        abort(500, description="Refusing to delete a model file outside ai_module")
+
+    if not resolved_path.exists():
+        return False
+    if not resolved_path.is_file():
+        abort(500, description="Model path is not a file")
+
+    resolved_path.unlink()
+    return True
+
+
+def _fine_tune_suffix(payload: dict[str, object]):
+    tuning_payload = {
+        "removedFeatures": sorted(payload.get("removedFeatures", [])),
+        "hyperparameters": payload.get("hyperparameters", {}),
+        "targetRatio": payload.get("targetRatio", 1.0),
+        "classificationThreshold": payload.get("classificationThreshold", 0.5),
+    }
+    serialized = json.dumps(tuning_payload, sort_keys=True, separators=(",", ":"))
+    return f"tuned_{uuid.uuid5(uuid.NAMESPACE_URL, serialized).hex[:10]}"
 
 
 def _dataset_options():
@@ -159,8 +194,12 @@ def _run_training_job(job_id: str, payload: dict[str, object]):
                 dataset_id=dataset_id,
                 balancing_method=balancing_method,
                 target_ratio=payload["targetRatio"],
+                classification_threshold=payload["classificationThreshold"],
                 force_retrain=payload["forceRetrain"],
                 use_gpu=payload["useGpu"],
+                removed_features=payload.get("removedFeatures", []),
+                hyperparameters=payload.get("hyperparameters", {}),
+                model_id_suffix=payload.get("modelIdSuffix"),
             )
             with _model_cache_lock:
                 _model_cache.pop(result["modelId"], None)
@@ -304,8 +343,23 @@ def api_start_training_job():
     balancing_methods = _request_list(body, "balancingMethods", "balancingMethod")
     model_specs = body.get("models", [])
     target_ratio = body.get("targetRatio", 1.0)
+    classification_threshold = body.get("classificationThreshold", 0.5)
     force_retrain = bool(body.get("forceRetrain", False))
     use_gpu = bool(body.get("useGpu", True))
+    removed_features = _request_list(body, "removedFeatures", "removedFeature")
+    hyperparameters = body.get("hyperparameters", {})
+    model_id_suffix = body.get("modelIdSuffix")
+
+    if hyperparameters is None:
+        hyperparameters = {}
+    if not isinstance(hyperparameters, dict):
+        abort(400, description="'hyperparameters' must be an object")
+    if model_id_suffix is not None:
+        model_id_suffix = str(model_id_suffix).strip()
+        if not model_id_suffix:
+            model_id_suffix = None
+        elif not all(char.isalnum() or char in {"_", "-"} for char in model_id_suffix):
+            abort(400, description="'modelIdSuffix' may only contain letters, digits, underscores, or hyphens")
 
     if model_specs:
         if not isinstance(model_specs, list):
@@ -345,10 +399,24 @@ def api_start_training_job():
         target_ratio = float(target_ratio)
     except (TypeError, ValueError):
         abort(400, description="'targetRatio' must be a number")
+    try:
+        classification_threshold = float(classification_threshold)
+    except (TypeError, ValueError):
+        abort(400, description="'classificationThreshold' must be a number")
     if "weighted" in balancing_methods:
         target_ratio = 1.0
     if not 0 < target_ratio <= 1:
         abort(400, description="'targetRatio' must be in the interval (0, 1]")
+    if not 0 < classification_threshold < 1:
+        abort(400, description="'classificationThreshold' must be in the interval (0, 1)")
+    if removed_features or hyperparameters or classification_threshold != 0.5:
+        force_retrain = True
+        model_id_suffix = model_id_suffix or _fine_tune_suffix({
+            "removedFeatures": removed_features,
+            "hyperparameters": hyperparameters,
+            "targetRatio": target_ratio,
+            "classificationThreshold": classification_threshold,
+        })
 
     with _connect() as con:
         _ensure_schema(con)
@@ -367,9 +435,16 @@ def api_start_training_job():
         "datasetIds": dataset_ids,
         "balancingMethods": balancing_methods,
         "targetRatio": target_ratio,
+        "classificationThreshold": classification_threshold,
         "forceRetrain": force_retrain,
         "useGpu": use_gpu,
     }
+    if removed_features:
+        payload["removedFeatures"] = removed_features
+    if hyperparameters:
+        payload["hyperparameters"] = hyperparameters
+    if model_id_suffix:
+        payload["modelIdSuffix"] = model_id_suffix
     if model_specs:
         payload["models"] = normalized_specs
     job_id = uuid.uuid4().hex
@@ -422,6 +497,7 @@ def api_models():
             "featureSet": row["feature_set"],
             "uncertaintyVariant": row["uncertainty_variant"],
             "balancingMethod": row["balancing_method"],
+            "isTuned": _is_tuned_model(row["model_id"]),
             **metrics,
         })
     return jsonify(models)
@@ -444,12 +520,46 @@ def api_model_detail(model_id: str):
         "featureSet": row["feature_set"],
         "uncertaintyVariant": row["uncertainty_variant"],
         "balancingMethod": row["balancing_method"],
+        "isTuned": _is_tuned_model(model_id),
         "auc": metrics["auc"],
         "classificationReport": json.loads(row["classification_report"]),
         "confusionMatrix": json.loads(row["confusion_matrix"]),
         "featureImportances": json.loads(row["feature_importances"]),
         "rocCurve": json.loads(row["roc_curve"]),
         "featureColumns": json.loads(row["feature_columns"]),
+    })
+
+@app.route("/api/models/<model_id>", methods=["DELETE"])
+def api_delete_model(model_id: str):
+    with _connect() as con:
+        _ensure_schema(con)
+        row = con.execute(
+            """
+            SELECT m.model_id, r.reference
+            FROM _model_results m
+            LEFT JOIN _registry r
+                ON r.id = m.model_id AND r.type = 'model'
+            WHERE m.model_id = ?
+            """,
+            (model_id,),
+        ).fetchone()
+        if not row:
+            abort(404, description=f"Model '{model_id}' not found")
+
+        file_deleted = _delete_model_file(row["reference"])
+        con.execute("DELETE FROM _model_results WHERE model_id = ?", (model_id,))
+        con.execute(
+            "DELETE FROM _registry WHERE id = ? AND type = 'model'",
+            (model_id,),
+        )
+
+    with _model_cache_lock:
+        _model_cache.pop(model_id, None)
+
+    return jsonify({
+        "ok": True,
+        "modelId": model_id,
+        "fileDeleted": file_deleted,
     })
 
 @app.route("/api/models/<model_id>/predict", methods=["POST"])

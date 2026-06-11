@@ -5,8 +5,13 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
 import FormControl from '@mui/material/FormControl'
 import FormControlLabel from '@mui/material/FormControlLabel'
+import IconButton from '@mui/material/IconButton'
 import InputLabel from '@mui/material/InputLabel'
 import LinearProgress from '@mui/material/LinearProgress'
 import ListItemText from '@mui/material/ListItemText'
@@ -14,13 +19,15 @@ import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Select from '@mui/material/Select'
 import Switch from '@mui/material/Switch'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
+import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import ScienceIcon from '@mui/icons-material/Science'
-import { DataGrid, type GridColDef, type GridRowParams, type GridRowSelectionModel } from '@mui/x-data-grid'
+import { DataGrid, type GridColDef, type GridRenderCellParams, type GridRowParams, type GridRowSelectionModel } from '@mui/x-data-grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchJson, postJson } from '../api'
+import { deleteJson, fetchJson, postJson } from '../api'
 import {
   ALGORITHM_LABELS,
   BALANCING_METHOD_LABELS,
@@ -44,6 +51,7 @@ export type ModelRow = {
   f1: number
   precision: number
   recall: number
+  isTuned: boolean
 }
 
 type TrainingDatasetOption = {
@@ -146,6 +154,10 @@ async function fetchModels(): Promise<ModelRow[]> {
   return fetchJson<ModelRow[]>('/api/models')
 }
 
+async function deleteModel(modelId: string): Promise<{ ok: boolean; modelId: string; fileDeleted: boolean }> {
+  return deleteJson(`/api/models/${encodeURIComponent(modelId)}`)
+}
+
 async function fetchTrainingOptions(): Promise<TrainingOptions> {
   return fetchJson<TrainingOptions>('/api/training/options')
 }
@@ -162,7 +174,15 @@ async function fetchTrainingCoverage(): Promise<TrainingCoverage> {
   return fetchJson<TrainingCoverage>('/api/training/coverage')
 }
 
-function useColumns(): GridColDef[] {
+function useColumns({
+  allowDelete = false,
+  deletingModelId = '',
+  onDelete,
+}: {
+  allowDelete?: boolean
+  deletingModelId?: string
+  onDelete?: (model: ModelRow) => void
+} = {}): GridColDef[] {
   return useMemo<GridColDef[]>(() => [
     {
       field: 'algorithm',
@@ -253,7 +273,38 @@ function useColumns(): GridColDef[] {
       headerAlign: 'left',
       valueFormatter: (value) => pct(value as number),
     },
-  ], [])
+    ...(allowDelete ? [{
+      field: 'actions',
+      headerName: '',
+      width: 64,
+      sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      align: 'center' as const,
+      headerAlign: 'center' as const,
+      renderCell: ({ row }: GridRenderCellParams<ModelRow>) => {
+        const model = row as ModelRow
+        return (
+          <Tooltip title="Delete model">
+            <span>
+              <IconButton
+                size="small"
+                color="error"
+                disabled={deletingModelId === model.id}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onDelete?.(model)
+                }}
+                aria-label={`Delete ${model.id}`}
+              >
+                <DeleteOutlinedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )
+      },
+    }] : []),
+  ], [allowDelete, deletingModelId, onDelete])
 }
 
 function ModelOverview({ models }: { models: ModelRow[] }) {
@@ -840,6 +891,86 @@ function MissingStatisticsPanel() {
   )
 }
 
+function ModelListSection({
+  title,
+  subtitle,
+  rows,
+  columns,
+  loading,
+  selectMode,
+  rowSelectionModel,
+  onSelectionChange,
+  onRowClick,
+}: {
+  title: string
+  subtitle: string
+  rows: ModelRow[]
+  columns: GridColDef[]
+  loading: boolean
+  selectMode: boolean
+  rowSelectionModel: GridRowSelectionModel
+  onSelectionChange: (rows: ModelRow[], model: GridRowSelectionModel) => void
+  onRowClick: (params: GridRowParams) => void
+}) {
+  return (
+    <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+      <Box
+        sx={{
+          px: 2,
+          py: 1.5,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1.5,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box>
+          <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{title}</Typography>
+          <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
+        </Box>
+        <Chip label={`${rows.length} model${rows.length === 1 ? '' : 's'}`} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
+      </Box>
+
+      {rows.length === 0 && !loading ? (
+        <Box sx={{ px: 2, py: 4 }}>
+          <Typography variant="body2" color="text.secondary">No models in this group yet.</Typography>
+        </Box>
+      ) : (
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          loading={loading}
+          density="compact"
+          autoHeight
+          hideFooter
+          checkboxSelection={!selectMode}
+          disableRowSelectionOnClick={!selectMode}
+          disableRowSelectionExcludeModel
+          rowSelectionModel={rowSelectionModel}
+          onRowSelectionModelChange={(model) => onSelectionChange(rows, model)}
+          onRowClick={onRowClick}
+          sx={{
+            border: 0,
+            cursor: 'pointer',
+            '& .MuiDataGrid-columnHeaders': {
+              bgcolor: 'grey.50',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+            },
+            '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700, textAlign: 'left' },
+            '& .MuiDataGrid-row:hover': { bgcolor: 'action.hover' },
+            '& .MuiDataGrid-cell': { py: 0.75 },
+            '& .MuiDataGrid-cellContent': { justifyContent: 'flex-start' },
+          }}
+        />
+      )}
+    </Paper>
+  )
+}
+
 function ModelComparison({
   embedded = false,
   mode = 'compare',
@@ -847,7 +978,9 @@ function ModelComparison({
   onModelSelect,
 }: ModelComparisonProps) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({ type: 'include', ids: new Set() })
+  const [deleteTarget, setDeleteTarget] = useState<ModelRow | null>(null)
 
   const query = useQuery({
     queryKey: ['models'],
@@ -856,15 +989,35 @@ function ModelComparison({
   })
 
   const models = query.data ?? []
+  const normalModels = useMemo(() => models.filter((model) => !model.isTuned), [models])
+  const tunedModels = useMemo(() => models.filter((model) => model.isTuned), [models])
   const loading = query.isLoading || query.isFetching
   const error = query.isError ? 'Could not load models from the backend.' : ''
-  const columns = useColumns()
   const selectedIds = useMemo(
     () => (selectionModel.type === 'include' ? [...selectionModel.ids].map(String) : []),
     [selectionModel],
   )
   const canCompare = selectedIds.length >= 2
   const selectMode = mode === 'select'
+  const deleteMutation = useMutation({
+    mutationFn: deleteModel,
+    onSuccess: (result) => {
+      setSelectionModel((current) => {
+        if (current.type !== 'include') return current
+        const ids = new Set(current.ids)
+        ids.delete(result.modelId)
+        return { type: 'include', ids }
+      })
+      setDeleteTarget(null)
+      queryClient.invalidateQueries({ queryKey: ['models'] })
+      queryClient.invalidateQueries({ queryKey: ['training-coverage'] })
+    },
+  })
+  const columns = useColumns({
+    allowDelete: !selectMode,
+    deletingModelId: deleteMutation.variables ?? '',
+    onDelete: setDeleteTarget,
+  })
   const rowSelectionModel: GridRowSelectionModel = selectMode
     ? selectedModelId
       ? { type: 'include', ids: new Set([selectedModelId]) }
@@ -884,14 +1037,34 @@ function ModelComparison({
     navigate(`/models/${params.row.id}`)
   }
 
+  const handleSectionSelectionChange = (rows: ModelRow[], nextModel: GridRowSelectionModel) => {
+    if (selectMode) return
+    const rowIds = new Set(rows.map((row) => row.id))
+    const nextIds = nextModel.type === 'include' ? new Set([...nextModel.ids].map(String)) : new Set<string>()
+
+    setSelectionModel((current) => {
+      const ids = current.type === 'include' ? new Set([...current.ids].map(String)) : new Set<string>()
+      rowIds.forEach((id) => ids.delete(id))
+      nextIds.forEach((id) => ids.add(id))
+      return { type: 'include', ids }
+    })
+  }
+
+  const confirmDelete = () => {
+    if (!deleteTarget || deleteMutation.isPending) return
+    deleteMutation.mutate(deleteTarget.id)
+  }
+
   const content = (
-    <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       <Box
         sx={{
           px: 2,
           py: 1.5,
-          borderBottom: '1px solid',
+          border: '1px solid',
           borderColor: 'divider',
+          borderRadius: 3,
+          bgcolor: 'background.paper',
           display: 'flex',
           gap: 1.5,
           alignItems: 'center',
@@ -916,39 +1089,66 @@ function ModelComparison({
       </Box>
 
       {error ? (
-        <Box sx={{ px: 2, py: 4 }}>
+        <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', px: 2, py: 4 }}>
           <Typography variant="body2" color="error">{error}</Typography>
-        </Box>
+        </Paper>
       ) : (
-        <DataGrid
-          rows={models}
-          columns={columns}
-          loading={loading}
-          density="compact"
-          autoHeight
-          hideFooter
-          checkboxSelection={!selectMode}
-          disableRowSelectionOnClick={!selectMode}
-          disableRowSelectionExcludeModel
-          rowSelectionModel={rowSelectionModel}
-          onRowSelectionModelChange={selectMode ? undefined : setSelectionModel}
-          onRowClick={handleRowClick}
-          sx={{
-            border: 0,
-            cursor: 'pointer',
-            '& .MuiDataGrid-columnHeaders': {
-              bgcolor: 'grey.50',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-            },
-            '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700, textAlign: 'left' },
-            '& .MuiDataGrid-row:hover': { bgcolor: 'action.hover' },
-            '& .MuiDataGrid-cell': { py: 0.75 },
-            '& .MuiDataGrid-cellContent': { justifyContent: 'flex-start' },
-          }}
-        />
+        <>
+          <ModelListSection
+            title="Normal models"
+            subtitle="Baseline trained models saved in the regular model folder."
+            rows={normalModels}
+            columns={columns}
+            loading={loading}
+            selectMode={selectMode}
+            rowSelectionModel={rowSelectionModel}
+            onSelectionChange={handleSectionSelectionChange}
+            onRowClick={handleRowClick}
+          />
+          <ModelListSection
+            title="Fine-tuned models"
+            subtitle="Tuned runs saved separately in the tuned-models folder."
+            rows={tunedModels}
+            columns={columns}
+            loading={loading}
+            selectMode={selectMode}
+            rowSelectionModel={rowSelectionModel}
+            onSelectionChange={handleSectionSelectionChange}
+            onRowClick={handleRowClick}
+          />
+        </>
       )}
-    </Paper>
+
+      {deleteMutation.isError && (
+        <Alert severity="error">{deleteMutation.error.message}</Alert>
+      )}
+
+      <Dialog open={Boolean(deleteTarget)} onClose={() => !deleteMutation.isPending && setDeleteTarget(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete model?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            This removes the model file and its database records. This cannot be undone.
+          </Typography>
+          {deleteTarget && (
+            <Typography variant="body2" sx={{ mt: 1.5, fontWeight: 700, wordBreak: 'break-word' }}>
+              {deleteTarget.id}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={deleteMutation.isPending} onClick={() => setDeleteTarget(null)}>Cancel</Button>
+          <Button
+            color="error"
+            variant="contained"
+            startIcon={<DeleteOutlinedIcon />}
+            disabled={deleteMutation.isPending}
+            onClick={confirmDelete}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   )
 
   if (embedded) return content

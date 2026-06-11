@@ -32,6 +32,7 @@ BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 AI_MODULE_DIR = PROJECT_ROOT / "ai_module"
 MODELS_DIR = AI_MODULE_DIR / "models"
+TUNED_MODELS_DIR = AI_MODULE_DIR / "tuned-models"
 BALANCED_CACHE_DIR = AI_MODULE_DIR / "balanced_training_cache"
 
 if str(AI_MODULE_DIR.resolve()) not in sys.path:
@@ -220,25 +221,45 @@ def make_classifier(
     *,
     use_gpu: bool = False,
     balancing_method: str | None = None,
+    hyperparameters: dict[str, object] | None = None,
 ):
+    hyperparameters = hyperparameters or {}
+
     if algorithm == "random_forest":
+        params = {
+            "n_estimators": int(hyperparameters.get("n_estimators", 200)),
+            "max_depth": (
+                None
+                if hyperparameters.get("max_depth") in (None, "", 0, "0")
+                else int(hyperparameters["max_depth"])
+            ),
+            "min_samples_leaf": int(hyperparameters.get("min_samples_leaf", 1)),
+        }
         if use_gpu:
             return XGBRFClassifier(
-                n_estimators=200,
+                n_estimators=params["n_estimators"],
+                max_depth=params["max_depth"],
                 eval_metric="logloss",
                 random_state=42,
                 n_jobs=-1,
                 **_xgboost_gpu_params(),
             )
         return RandomForestClassifier(
-            n_estimators=200,
+            **params,
             random_state=42,
             n_jobs=-1,
             class_weight="balanced" if balancing_method == "weighted" else None,
         )
 
     if algorithm == "xgboost":
+        params = {
+            "n_estimators": int(hyperparameters.get("n_estimators", 100)),
+            "max_depth": int(hyperparameters.get("max_depth", 6)),
+            "learning_rate": float(hyperparameters.get("learning_rate", 0.3)),
+            "subsample": float(hyperparameters.get("subsample", 1.0)),
+        }
         return XGBClassifier(
+            **params,
             eval_metric="logloss",
             random_state=42,
             n_jobs=-1,
@@ -246,7 +267,14 @@ def make_classifier(
         )
 
     if algorithm == "lightgbm":
+        params = {
+            "n_estimators": int(hyperparameters.get("n_estimators", 100)),
+            "max_depth": int(hyperparameters.get("max_depth", -1)),
+            "learning_rate": float(hyperparameters.get("learning_rate", 0.1)),
+            "num_leaves": int(hyperparameters.get("num_leaves", 31)),
+        }
         return LGBMClassifier(
+            **params,
             random_state=42,
             n_jobs=-1,
             verbose=-1,
@@ -262,8 +290,12 @@ def train_model(
     dataset_id: str,
     balancing_method: str,
     target_ratio: float = 1.0,
+    classification_threshold: float = 0.5,
     force_retrain: bool = False,
     use_gpu: bool = False,
+    removed_features: list[str] | None = None,
+    hyperparameters: dict[str, object] | None = None,
+    model_id_suffix: str | None = None,
 ) -> dict[str, object]:
     if algorithm not in ALGORITHMS:
         raise ValueError(f"Unsupported algorithm '{algorithm}'.")
@@ -273,6 +305,8 @@ def train_model(
         target_ratio = 1.0
     if not 0 < target_ratio <= 1:
         raise ValueError("targetRatio must be in the interval (0, 1].")
+    if not 0 < classification_threshold < 1:
+        raise ValueError("classificationThreshold must be in the interval (0, 1).")
 
     feature_set, uncertainty_variant = parse_dataset_id(dataset_id)
     ds = load_dataset(dataset_id)
@@ -280,6 +314,12 @@ def train_model(
         raise ValueError(f"Dataset '{dataset_id}' does not include target column {TARGET_COL}.")
 
     X = ds.drop(columns=[TARGET_COL]).apply(pd.to_numeric, errors="coerce")
+    removed_features = sorted(set(removed_features or []))
+    valid_removed_features = [column for column in removed_features if column in X.columns]
+    if valid_removed_features:
+        X = X.drop(columns=valid_removed_features)
+    if X.empty:
+        raise ValueError("At least one feature column must remain after feature removal.")
     y = ds[TARGET_COL]
 
     X_train, X_test, y_train, y_test = train_test_split(
@@ -299,9 +339,15 @@ def train_model(
         random_state=42,
     )
 
-    MODELS_DIR.mkdir(exist_ok=True)
-    model_id = f"{algorithm}_{balancing_method}_{dataset_id}"
-    pkl_path = (MODELS_DIR / f"{model_id}.pkl").resolve()
+    base_model_id = f"{algorithm}_{balancing_method}_{dataset_id}"
+    model_id = (
+        f"{base_model_id}__{model_id_suffix}"
+        if model_id_suffix
+        else base_model_id
+    )
+    model_dir = TUNED_MODELS_DIR if model_id_suffix else MODELS_DIR
+    model_dir.mkdir(exist_ok=True)
+    pkl_path = (model_dir / f"{model_id}.pkl").resolve()
 
     reused = pkl_path.exists() and not force_retrain
     if reused:
@@ -311,6 +357,7 @@ def train_model(
             algorithm,
             use_gpu=use_gpu,
             balancing_method=balancing_method,
+            hyperparameters=hyperparameters,
         )
         fit_params = dict(balance_info.get("fit_params", {}))
         if algorithm == "random_forest" and balancing_method == "weighted" and not use_gpu:
@@ -326,8 +373,8 @@ def train_model(
             raise
         joblib.dump(clf, pkl_path)
 
-    y_pred = clf.predict(X_test)
     y_prob = clf.predict_proba(X_test)[:, 1]
+    y_pred = (y_prob >= classification_threshold).astype(int)
 
     report_raw = classification_report(
         y_test,
@@ -386,8 +433,11 @@ def train_model(
         "uncertaintyVariant": uncertainty_variant,
         "balancingMethod": balancing_method,
         "targetRatio": target_ratio,
+        "classificationThreshold": classification_threshold,
         "reusedExistingModel": reused,
         "reusedBalancedData": balance_cache_hit,
+        "removedFeatures": valid_removed_features,
+        "hyperparameters": hyperparameters or {},
         "metrics": metrics,
         "balanceInfo": _sanitized_balance_info(balance_info),
     }
