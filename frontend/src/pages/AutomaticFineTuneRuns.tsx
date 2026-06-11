@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
 import Divider from '@mui/material/Divider'
 import LinearProgress from '@mui/material/LinearProgress'
@@ -20,6 +21,7 @@ import {
   AUTOMATIC_METRIC_LABELS,
   automaticResultRows,
   automaticTrainingRunExportUrl,
+  automaticTrainingRunsExportUrl,
   fetchAutomaticTrainingRun,
   fetchAutomaticTrainingRuns,
   paramLabel,
@@ -47,6 +49,7 @@ function AutomaticFineTuneRuns() {
   const navigate = useNavigate()
   const { id } = useParams()
   const [selectedRunId, setSelectedRunId] = useState('')
+  const [selectedRunIds, setSelectedRunIds] = useState<string[]>([])
 
   const runsQuery = useQuery({
     queryKey: ['automatic-fine-tuning-runs'],
@@ -59,6 +62,9 @@ function AutomaticFineTuneRuns() {
 
   const runs = runsQuery.data ?? []
   const activeRunId = id ?? ''
+  const allRunIds = useMemo(() => runs.map((savedRun) => savedRun.id), [runs])
+  const selectedRunIdSet = useMemo(() => new Set(selectedRunIds), [selectedRunIds])
+  const selectedRunsExportUrl = selectedRunIds.length ? automaticTrainingRunsExportUrl(selectedRunIds) : ''
 
   useEffect(() => {
     if (activeRunId || !runs[0]) return
@@ -87,6 +93,30 @@ function AutomaticFineTuneRuns() {
   useEffect(() => {
     setSelectedRunId('')
   }, [activeRunId])
+
+  useEffect(() => {
+    setSelectedRunIds((current) => {
+      const knownRunIds = new Set(allRunIds)
+      const filtered = current.filter((runId) => knownRunIds.has(runId))
+      return filtered.length === current.length ? current : filtered
+    })
+  }, [allRunIds])
+
+  function toggleRunSelection(runId: string) {
+    setSelectedRunIds((current) => (
+      current.includes(runId)
+        ? current.filter((selectedId) => selectedId !== runId)
+        : [...current, runId]
+    ))
+  }
+
+  function selectAllRuns() {
+    setSelectedRunIds(allRunIds)
+  }
+
+  function clearSelectedRuns() {
+    setSelectedRunIds([])
+  }
 
   const columns = useMemo<GridColDef<AutomaticResultRow>[]>(() => [
     {
@@ -189,45 +219,90 @@ function AutomaticFineTuneRuns() {
 
           <Box sx={{ p: 2.5, display: 'grid', gridTemplateColumns: { xs: '1fr', xl: '320px minmax(0, 1fr)' }, gap: 2 }}>
             <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', alignSelf: 'start' }}>
-              <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Runs</Typography>
-                <Typography variant="caption" color="text.secondary">{runs.length} saved</Typography>
+              <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
+                  <Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Runs</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {runs.length} saved - {selectedRunIds.length} selected
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <Button size="small" variant="text" onClick={selectAllRuns} disabled={!runs.length || selectedRunIds.length === runs.length}>
+                      All
+                    </Button>
+                    <Button size="small" variant="text" onClick={clearSelectedRuns} disabled={!selectedRunIds.length}>
+                      Clear
+                    </Button>
+                  </Box>
+                </Box>
+                <Button
+                  component="a"
+                  href={selectedRunsExportUrl || undefined}
+                  download
+                  size="small"
+                  variant="contained"
+                  startIcon={<DownloadIcon />}
+                  disabled={!selectedRunIds.length}
+                  sx={{ alignSelf: 'stretch' }}
+                >
+                  Export selected to Excel
+                </Button>
               </Box>
               <Box sx={{ maxHeight: { xs: 360, xl: 'calc(100vh - 245px)' }, overflow: 'auto' }}>
                 {runs.map((savedRun) => {
-                  const selected = savedRun.id === activeRunId
+                  const active = savedRun.id === activeRunId
+                  const checked = selectedRunIdSet.has(savedRun.id)
                   return (
                     <Box
                       key={savedRun.id}
-                      component="button"
-                      type="button"
-                      onClick={() => navigate(`/fine-tune/automatic/runs/${savedRun.id}`)}
                       sx={{
                         width: '100%',
-                        border: 0,
                         borderBottom: '1px solid',
                         borderColor: 'divider',
-                        bgcolor: selected ? 'primary.50' : 'background.paper',
+                        bgcolor: active ? 'primary.50' : 'background.paper',
                         color: 'text.primary',
-                        cursor: 'pointer',
-                        display: 'block',
-                        p: 1.5,
-                        textAlign: 'left',
-                        '&:hover': { bgcolor: selected ? 'primary.50' : 'grey.50' },
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        '&:hover': { bgcolor: active ? 'primary.50' : 'grey.50' },
                       }}
                     >
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 800 }} noWrap>
-                          {savedRun.baseModelId || savedRun.id}
+                      <Checkbox
+                        checked={checked}
+                        onChange={() => toggleRunSelection(savedRun.id)}
+                        slotProps={{ input: { 'aria-label': `Select automatic run ${savedRun.baseModelId || savedRun.id}` } }}
+                        sx={{ mt: 0.5, ml: 0.5 }}
+                      />
+                      <Box
+                        component="button"
+                        type="button"
+                        onClick={() => navigate(`/fine-tune/automatic/runs/${savedRun.id}`)}
+                        sx={{
+                          minWidth: 0,
+                          flex: 1,
+                          border: 0,
+                          bgcolor: 'transparent',
+                          color: 'text.primary',
+                          cursor: 'pointer',
+                          display: 'block',
+                          p: 1.5,
+                          pl: 0.5,
+                          textAlign: 'left',
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 800 }} noWrap>
+                            {savedRun.baseModelId || savedRun.id}
+                          </Typography>
+                          <Chip size="small" color={statusColor(savedRun.status)} label={savedRun.status} sx={{ borderRadius: 1, textTransform: 'capitalize' }} />
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                          {formatRunTime(savedRun.createdAt)}
                         </Typography>
-                        <Chip size="small" color={statusColor(savedRun.status)} label={savedRun.status} sx={{ borderRadius: 1, textTransform: 'capitalize' }} />
-                      </Box>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                        {formatRunTime(savedRun.createdAt)}
-                      </Typography>
-                      <Box sx={{ mt: 1, display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-                        <Chip size="small" variant="outlined" label={`${savedRun.total ?? '-'} combos`} sx={{ borderRadius: 1 }} />
-                        <Chip size="small" variant="outlined" label={`Best ${savedRun.bestScore === null ? '-' : savedRun.bestScore.toFixed(3)}`} sx={{ borderRadius: 1 }} />
+                        <Box sx={{ mt: 1, display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                          <Chip size="small" variant="outlined" label={`${savedRun.total ?? '-'} combos`} sx={{ borderRadius: 1 }} />
+                          <Chip size="small" variant="outlined" label={`Best ${savedRun.bestScore === null ? '-' : savedRun.bestScore.toFixed(3)}`} sx={{ borderRadius: 1 }} />
+                        </Box>
                       </Box>
                     </Box>
                   )

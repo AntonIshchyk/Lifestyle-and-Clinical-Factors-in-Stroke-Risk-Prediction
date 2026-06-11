@@ -113,6 +113,12 @@ export function automaticTrainingRunExportUrl(jobId: string) {
   return `/api/training/automatic-runs/${encodeURIComponent(jobId)}/export`
 }
 
+export function automaticTrainingRunsExportUrl(jobIds: string[]) {
+  const params = new URLSearchParams()
+  jobIds.forEach((jobId) => params.append('ids', jobId))
+  return `/api/training/automatic-runs-export?${params.toString()}`
+}
+
 export function automaticResultRows(results: AutomaticTrainingResult[] = []): AutomaticResultRow[] {
   return results
     .map((result) => ({

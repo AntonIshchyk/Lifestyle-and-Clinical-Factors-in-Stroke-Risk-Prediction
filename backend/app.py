@@ -215,10 +215,10 @@ def _model_export_details(model_ids: list[str]):
     }
 
 
-def _automatic_run_export_workbook(job: dict[str, object]):
+def _automatic_run_ranked_models(job: dict[str, object]):
     result = job.get("result") or {}
     models = result.get("models", []) if isinstance(result, dict) else []
-    ranked_models = sorted(
+    return sorted(
         models,
         key=lambda model: (
             _stroke_risk_score(model.get("metrics", {})),
@@ -228,17 +228,11 @@ def _automatic_run_export_workbook(job: dict[str, object]):
         ),
         reverse=True,
     )
-    details_by_model = _model_export_details([
-        str(model.get("modelId"))
-        for model in ranked_models
-        if model.get("modelId")
-    ])
-    hyperparameter_keys = sorted({
-        key
-        for model in ranked_models
-        for key in (model.get("hyperparameters") or {}).keys()
-    })
-    summary_rows = [
+
+
+def _automatic_run_summary_rows(job: dict[str, object]):
+    result = job.get("result") or {}
+    return [
         ["Field", "Value"],
         ["Run ID", job["id"]],
         ["Status", job["status"]],
@@ -252,7 +246,35 @@ def _automatic_run_export_workbook(job: dict[str, object]):
         ["Reused models", result.get("reused") if isinstance(result, dict) else None],
         ["Error", job.get("error")],
     ]
+
+
+def _automatic_run_result_rows(
+    job: dict[str, object],
+    *,
+    hyperparameter_keys: list[str] | None = None,
+    details_by_model: dict[str, object] | None = None,
+    include_run_columns: bool = False,
+):
+    ranked_models = _automatic_run_ranked_models(job)
+    if hyperparameter_keys is None:
+        hyperparameter_keys = sorted({
+            key
+            for model in ranked_models
+            for key in (model.get("hyperparameters") or {}).keys()
+        })
+    if details_by_model is None:
+        details_by_model = _model_export_details([
+            str(model.get("modelId"))
+            for model in ranked_models
+            if model.get("modelId")
+        ])
+
+    run_header = []
+    if include_run_columns:
+        run_header = ["Run ID", "Base model ID", "Run created at"]
+
     result_header = [
+        *run_header,
         "Rank",
         "Score",
         "Model ID",
@@ -280,7 +302,15 @@ def _automatic_run_export_workbook(job: dict[str, object]):
         details = details_by_model.get(model.get("modelId"), {})
         confusion_matrix = model.get("confusionMatrix") or details.get("confusionMatrix") or {}
         hyperparameters = model.get("hyperparameters") or {}
+        run_values = []
+        if include_run_columns:
+            run_values = [
+                job.get("id"),
+                (job.get("request") or {}).get("baseModelId"),
+                job.get("createdAt"),
+            ]
         result_rows.append([
+            *run_values,
             rank,
             _stroke_risk_score(metrics),
             model.get("modelId"),
@@ -302,10 +332,101 @@ def _automatic_run_export_workbook(job: dict[str, object]):
             confusion_matrix.get("tp"),
             *[hyperparameters.get(key) for key in hyperparameter_keys],
         ])
+    return result_rows
+
+
+def _automatic_run_export_workbook(job: dict[str, object]):
     return _xlsx_workbook([
-        ("Run summary", summary_rows),
-        ("Model results", result_rows),
+        ("Run summary", _automatic_run_summary_rows(job)),
+        ("Model results", _automatic_run_result_rows(job)),
     ])
+
+
+def _automatic_runs_export_workbook(jobs: list[dict[str, object]]):
+    all_ranked_models = [
+        model
+        for job in jobs
+        for model in _automatic_run_ranked_models(job)
+    ]
+    hyperparameter_keys = sorted({
+        key
+        for model in all_ranked_models
+        for key in (model.get("hyperparameters") or {}).keys()
+    })
+    details_by_model = _model_export_details([
+        str(model.get("modelId"))
+        for model in all_ranked_models
+        if model.get("modelId")
+    ])
+
+    overview_rows = [[
+        "Run ID",
+        "Base model ID",
+        "Status",
+        "Created at",
+        "Started at",
+        "Finished at",
+        "Total combinations",
+        "Trained models",
+        "Reused models",
+        "Best model ID",
+        "Best score",
+        "Message",
+        "Error",
+    ]]
+    combined_result_rows: list[list[object]] | None = None
+    for job in jobs:
+        result = job.get("result") or {}
+        ranked_models = _automatic_run_ranked_models(job)
+        best = ranked_models[0] if ranked_models else None
+        overview_rows.append([
+            job["id"],
+            (job.get("request") or {}).get("baseModelId"),
+            job["status"],
+            job["createdAt"],
+            job.get("startedAt"),
+            job.get("finishedAt"),
+            result.get("total") if isinstance(result, dict) else None,
+            result.get("trained") if isinstance(result, dict) else None,
+            result.get("reused") if isinstance(result, dict) else None,
+            best.get("modelId") if best else None,
+            _stroke_risk_score(best.get("metrics", {})) if best else None,
+            job["message"],
+            job.get("error"),
+        ])
+
+        result_rows = _automatic_run_result_rows(
+            job,
+            hyperparameter_keys=hyperparameter_keys,
+            details_by_model=details_by_model,
+            include_run_columns=True,
+        )
+        if combined_result_rows is None:
+            combined_result_rows = result_rows
+        else:
+            combined_result_rows.extend(result_rows[1:])
+
+    return _xlsx_workbook([
+        ("Selected runs", overview_rows),
+        ("Model results", combined_result_rows or _automatic_run_result_rows({"result": {"models": []}})),
+    ])
+
+
+def _load_automatic_training_run(job_id: str):
+    with _training_jobs_lock:
+        job = _training_jobs.get(job_id)
+        if job and (job.get("request") or {}).get("automatic"):
+            return _public_job(job)
+
+    with _connect() as con:
+        _ensure_schema(con)
+        row = con.execute(
+            "SELECT * FROM _automatic_training_runs WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+    if not row:
+        return None
+    return _automatic_run_from_row(row, include_result=True)
 
 
 def _automatic_run_summary(job: dict[str, object]):
@@ -948,47 +1069,51 @@ def api_automatic_training_runs():
 
 @app.route("/api/training/automatic-runs/<job_id>")
 def api_automatic_training_run(job_id: str):
-    with _training_jobs_lock:
-        job = _training_jobs.get(job_id)
-        if job and (job.get("request") or {}).get("automatic"):
-            return jsonify(_public_job(job))
-
-    with _connect() as con:
-        _ensure_schema(con)
-        row = con.execute(
-            "SELECT * FROM _automatic_training_runs WHERE job_id = ?",
-            (job_id,),
-        ).fetchone()
-    if not row:
+    job = _load_automatic_training_run(job_id)
+    if job is None:
         abort(404, description=f"Automatic training run '{job_id}' not found")
-    return jsonify(_automatic_run_from_row(row, include_result=True))
+    return jsonify(job)
+
+
+@app.route("/api/training/automatic-runs-export")
+def api_export_automatic_training_runs():
+    job_ids = []
+    for value in request.args.getlist("ids"):
+        job_ids.extend(part.strip() for part in value.split(",") if part.strip())
+    job_ids = list(dict.fromkeys(job_ids))
+
+    if not job_ids:
+        abort(400, description="At least one automatic training run ID is required")
+    if len(job_ids) > 100:
+        abort(400, description="Automatic training run export is limited to 100 runs")
+
+    jobs = []
+    missing_ids = []
+    for job_id in job_ids:
+        job = _load_automatic_training_run(job_id)
+        if job is None:
+            missing_ids.append(job_id)
+        else:
+            jobs.append(job)
+    if missing_ids:
+        abort(404, description=f"Automatic training run(s) not found: {', '.join(missing_ids)}")
+
+    workbook = _automatic_runs_export_workbook(jobs)
+    filename = f"automatic_fine_tuning_runs_{len(jobs)}.xlsx"
+    return send_file(
+        workbook,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.route("/api/training/automatic-runs/<job_id>/export")
 def api_export_automatic_training_run(job_id: str):
-    with _training_jobs_lock:
-        job = _training_jobs.get(job_id)
-        if job and (job.get("request") or {}).get("automatic"):
-            public_job = _public_job(job)
-            workbook = _automatic_run_export_workbook(public_job)
-            filename = f"automatic_fine_tuning_{_safe_export_filename(job_id)}.xlsx"
-            return send_file(
-                workbook,
-                as_attachment=True,
-                download_name=filename,
-                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-
-    with _connect() as con:
-        _ensure_schema(con)
-        row = con.execute(
-            "SELECT * FROM _automatic_training_runs WHERE job_id = ?",
-            (job_id,),
-        ).fetchone()
-    if not row:
+    job = _load_automatic_training_run(job_id)
+    if job is None:
         abort(404, description=f"Automatic training run '{job_id}' not found")
 
-    job = _automatic_run_from_row(row, include_result=True)
     workbook = _automatic_run_export_workbook(job)
     filename = f"automatic_fine_tuning_{_safe_export_filename(job_id)}.xlsx"
     return send_file(
