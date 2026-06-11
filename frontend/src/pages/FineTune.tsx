@@ -7,6 +7,7 @@ import Divider from '@mui/material/Divider'
 import FormControl from '@mui/material/FormControl'
 import InputLabel from '@mui/material/InputLabel'
 import LinearProgress from '@mui/material/LinearProgress'
+import ListSubheader from '@mui/material/ListSubheader'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Select from '@mui/material/Select'
@@ -19,7 +20,7 @@ import MemoryIcon from '@mui/icons-material/Memory'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import TuneIcon from '@mui/icons-material/Tune'
-import { DataGrid, type GridColDef, type GridRowSelectionModel } from '@mui/x-data-grid'
+import { DataGrid, type GridColDef, type GridRenderCellParams, type GridRowSelectionModel } from '@mui/x-data-grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchJson, postJson } from '../api'
 import {
@@ -43,6 +44,8 @@ type ModelRow = {
   f1: number
   precision: number
   recall: number
+  classificationThreshold: number
+  isTuned: boolean
 }
 
 type TrainingRequest = {
@@ -88,6 +91,14 @@ type TuneForm = {
   numLeaves: number
 }
 
+type FeatureImportanceComparisonRow = {
+  id: string
+  feature: string
+  baselineImportance: number
+  tunedImportance: number | null
+  delta: number | null
+}
+
 const METRICS = [
   { key: 'auc', label: 'AUC-ROC', format: (value: number) => value.toFixed(3) },
   { key: 'accuracy', label: 'Accuracy', format: pct },
@@ -100,10 +111,10 @@ const defaultForm = (model: ModelRow | null): TuneForm => ({
   algorithm: model?.algorithm ?? 'xgboost',
   balancingMethod: model?.balancingMethod ?? 'random_oversampling',
   targetRatio: model?.balancingMethod === 'weighted' ? 1 : 1,
-  classificationThreshold: 0.5,
-  useGpu: true,
+  classificationThreshold: model?.classificationThreshold ?? 0.5,
+  useGpu: model?.algorithm === 'random_forest' ? false : true,
   nEstimators: model?.algorithm === 'random_forest' ? 200 : 100,
-  maxDepth: model?.algorithm === 'lightgbm' ? -1 : 6,
+  maxDepth: model?.algorithm === 'random_forest' ? 0 : model?.algorithm === 'lightgbm' ? -1 : 6,
   learningRate: model?.algorithm === 'xgboost' ? 0.3 : 0.1,
   minSamplesLeaf: 1,
   subsample: 1,
@@ -124,6 +135,10 @@ async function fetchTrainingJob(jobId: string): Promise<TrainingJob> {
 
 function datasetIdFor(model: Pick<ModelRow, 'featureSet' | 'uncertaintyVariant'>) {
   return `${model.featureSet}_${model.uncertaintyVariant}`
+}
+
+function modelTypeLabel(model: Pick<ModelRow, 'isTuned'>) {
+  return model.isTuned ? 'Fine-tuned model' : 'Normal model'
 }
 
 function metricValue(model: Pick<ModelRow, 'auc' | 'accuracy' | 'f1' | 'precision' | 'recall'>, key: typeof METRICS[number]['key']) {
@@ -213,15 +228,129 @@ function ConfusionMatrixPanel({
   )
 }
 
+function normalizedImportances(detail: ModelDetail | null) {
+  const raw = detail?.featureImportances ?? []
+  const total = raw.reduce((sum, item) => sum + Math.max(0, item.importance), 0)
+  return new Map(raw.map((item) => [
+    item.feature,
+    total > 0 ? Math.max(0, item.importance) / total : 0,
+  ]))
+}
+
+function FeatureImportanceComparison({
+  baseline,
+  tuned,
+}: {
+  baseline: ModelDetail | null
+  tuned: ModelDetail | null
+}) {
+  const rows = useMemo<FeatureImportanceComparisonRow[]>(() => {
+    const baselineMap = normalizedImportances(baseline)
+    const tunedMap = normalizedImportances(tuned)
+    const features = new Set([...baselineMap.keys(), ...tunedMap.keys()])
+
+    return [...features]
+      .map((feature) => {
+        const baselineImportance = baselineMap.get(feature) ?? 0
+        const tunedImportance = tuned ? tunedMap.get(feature) ?? 0 : null
+        return {
+          id: feature,
+          feature,
+          baselineImportance,
+          tunedImportance,
+          delta: tunedImportance === null ? null : tunedImportance - baselineImportance,
+        }
+      })
+      .sort((left, right) => {
+        const leftScore = Math.max(left.baselineImportance, left.tunedImportance ?? 0)
+        const rightScore = Math.max(right.baselineImportance, right.tunedImportance ?? 0)
+        return rightScore - leftScore || left.feature.localeCompare(right.feature)
+      })
+      .slice(0, 30)
+  }, [baseline, tuned])
+
+  const columns = useMemo<GridColDef<FeatureImportanceComparisonRow>[]>(() => [
+    { field: 'feature', headerName: 'Feature', flex: 1.6, minWidth: 180 },
+    {
+      field: 'baselineImportance',
+      headerName: 'Before',
+      flex: 0.8,
+      minWidth: 110,
+      valueFormatter: (value) => pct(value as number),
+    },
+    {
+      field: 'tunedImportance',
+      headerName: 'After',
+      flex: 0.8,
+      minWidth: 110,
+      valueFormatter: (value) => (typeof value === 'number' ? pct(value) : '-'),
+    },
+    {
+      field: 'delta',
+      headerName: 'Change',
+      flex: 0.8,
+      minWidth: 110,
+      renderCell: ({ value }: GridRenderCellParams<FeatureImportanceComparisonRow, number | null>) => {
+        if (typeof value !== 'number') {
+          return <Typography variant="body2" color="text.secondary">-</Typography>
+        }
+        const positive = value >= 0
+        return (
+          <Typography variant="body2" sx={{ color: positive ? 'success.dark' : 'error.dark', fontWeight: 800 }}>
+            {positive ? '+' : ''}{(value * 100).toFixed(2)} pts
+          </Typography>
+        )
+      },
+    },
+  ], [])
+
+  return (
+    <Box sx={{ mt: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1.5, overflow: 'hidden', bgcolor: 'background.paper' }}>
+      <Box sx={{ px: 1.5, py: 1.25, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
+        <Box>
+          <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>Feature importance before and after</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {tuned ? 'Top 30 features by importance across both runs.' : 'Train a tuned run to fill the after column.'}
+          </Typography>
+        </Box>
+        <Chip size="small" variant="outlined" label={`${rows.length} shown`} sx={{ borderRadius: 1 }} />
+      </Box>
+      <DataGrid
+        rows={rows}
+        columns={columns}
+        loading={!baseline}
+        density="compact"
+        hideFooter
+        disableRowSelectionOnClick
+        sx={{
+          border: 0,
+          height: 420,
+          '& .MuiDataGrid-columnHeaders': { bgcolor: 'grey.50' },
+          '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 800 },
+        }}
+      />
+    </Box>
+  )
+}
+
 function SelectedModelSummary({ model, detail }: { model: ModelRow; detail: ModelDetail | null }) {
   return (
     <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, flexWrap: 'wrap' }}>
         <Box>
-          <Typography variant="caption" color="text.secondary">Baseline model</Typography>
+          <Typography variant="caption" color="text.secondary">Selected baseline</Typography>
           <Typography variant="h6" sx={{ fontSize: '1.05rem', fontWeight: 800 }}>{modelLabel(model)}</Typography>
         </Box>
-        <Chip size="small" label={`${detail?.featureColumns.length ?? '-'} features`} sx={{ borderRadius: 1 }} />
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <Chip
+            size="small"
+            color={model.isTuned ? 'primary' : 'default'}
+            variant={model.isTuned ? 'filled' : 'outlined'}
+            label={modelTypeLabel(model)}
+            sx={{ borderRadius: 1 }}
+          />
+          <Chip size="small" label={`${detail?.featureColumns.length ?? '-'} features`} sx={{ borderRadius: 1 }} />
+        </Box>
       </Box>
       <Box sx={{ mt: 1.5, display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
         <Chip size="small" variant="outlined" label={ALGORITHM_LABELS[model.algorithm]} />
@@ -248,6 +377,8 @@ function FineTune() {
   })
 
   const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data])
+  const normalModels = useMemo(() => models.filter((model) => !model.isTuned), [models])
+  const fineTunedModels = useMemo(() => models.filter((model) => model.isTuned), [models])
   const selectedModel = models.find((model) => model.id === selectedModelId) ?? models[0] ?? null
   const activeForm = useMemo(
     () => (selectedModel && formModelId !== selectedModel.id ? defaultForm(selectedModel) : form),
@@ -382,7 +513,7 @@ function FineTune() {
       targetRatio: activeForm.balancingMethod === 'weighted' ? 1 : activeForm.targetRatio,
       classificationThreshold: activeForm.classificationThreshold,
       forceRetrain: true,
-      useGpu: activeForm.useGpu,
+      useGpu: activeForm.algorithm === 'random_forest' ? false : activeForm.useGpu,
       removedFeatures,
       hyperparameters,
     })
@@ -427,18 +558,49 @@ function FineTune() {
           <Box sx={{ p: 2.5, display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1.25fr' }, gap: 2 }}>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <FormControl size="small" fullWidth disabled={modelsQuery.isLoading || active}>
-                <InputLabel id="fine-tune-model-label">Model</InputLabel>
+                <InputLabel id="fine-tune-model-label">Model baseline</InputLabel>
                 <Select
                   labelId="fine-tune-model-label"
-                  label="Model"
+                  label="Model baseline"
                   value={selectedModel?.id ?? ''}
+                  renderValue={(value) => {
+                    const model = models.find((item) => item.id === value)
+                    return model ? `${modelTypeLabel(model)} - ${modelLabel(model)}` : ''
+                  }}
                   onChange={(event) => handleModelChange(event.target.value)}
                 >
-                  {models.map((model) => (
-                    <MenuItem key={model.id} value={model.id}>{modelLabel(model)}</MenuItem>
+                  <ListSubheader>Normal models ({normalModels.length})</ListSubheader>
+                  {normalModels.map((model) => (
+                    <MenuItem key={model.id} value={model.id}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, width: '100%' }}>
+                        <Chip size="small" variant="outlined" label="Normal" sx={{ borderRadius: 1, minWidth: 68 }} />
+                        <Typography variant="body2" noWrap>{modelLabel(model)}</Typography>
+                      </Box>
+                    </MenuItem>
+                  ))}
+                  <ListSubheader>Fine-tuned models ({fineTunedModels.length})</ListSubheader>
+                  {fineTunedModels.map((model) => (
+                    <MenuItem key={model.id} value={model.id}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, width: '100%' }}>
+                        <Chip size="small" color="primary" label="Fine-tuned" sx={{ borderRadius: 1, minWidth: 92 }} />
+                        <Typography variant="body2" noWrap>{modelLabel(model)}</Typography>
+                      </Box>
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
+              <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: -1 }}>
+                <Chip size="small" variant="outlined" label={`${normalModels.length} normal`} sx={{ borderRadius: 1 }} />
+                <Chip size="small" color="primary" variant="outlined" label={`${fineTunedModels.length} fine-tuned`} sx={{ borderRadius: 1 }} />
+                {selectedModel && (
+                  <Chip
+                    size="small"
+                    color={selectedModel.isTuned ? 'primary' : 'default'}
+                    label={`Selected: ${modelTypeLabel(selectedModel)}`}
+                    sx={{ borderRadius: 1 }}
+                  />
+                )}
+              </Box>
 
               {selectedModel && <SelectedModelSummary model={selectedModel} detail={baselineDetail} />}
 
@@ -460,9 +622,10 @@ function FineTune() {
                         updateForm((current) => ({
                           ...current,
                           algorithm,
-                          maxDepth: algorithm === 'lightgbm' ? -1 : current.maxDepth < 1 ? 6 : current.maxDepth,
+                          maxDepth: algorithm === 'random_forest' ? 0 : algorithm === 'lightgbm' ? -1 : current.maxDepth < 1 ? 6 : current.maxDepth,
                           learningRate: algorithm === 'xgboost' ? 0.3 : algorithm === 'lightgbm' ? 0.1 : current.learningRate,
                           nEstimators: algorithm === 'random_forest' ? 200 : current.nEstimators,
+                          useGpu: algorithm === 'random_forest' ? false : current.useGpu,
                         }))
                       }}
                     >
@@ -502,7 +665,13 @@ function FineTune() {
                     type="number"
                     value={activeForm.maxDepth}
                     disabled={active}
-                    helperText={activeForm.algorithm === 'lightgbm' ? '-1 keeps LightGBM unrestricted' : undefined}
+                    helperText={
+                      activeForm.algorithm === 'random_forest'
+                        ? '0 keeps Random Forest unrestricted'
+                        : activeForm.algorithm === 'lightgbm'
+                          ? '-1 keeps LightGBM unrestricted'
+                          : undefined
+                    }
                     onChange={(event) => updateForm((current) => ({ ...current, maxDepth: Number(event.target.value) }))}
                   />
                   {activeForm.algorithm !== 'random_forest' && (
@@ -579,7 +748,11 @@ function FineTune() {
                 />
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
                   <Typography variant="body2">Use GPU when available</Typography>
-                  <Switch checked={activeForm.useGpu} disabled={active} onChange={(event) => updateForm((current) => ({ ...current, useGpu: event.target.checked }))} />
+                  <Switch
+                    checked={activeForm.algorithm === 'random_forest' ? false : activeForm.useGpu}
+                    disabled={active || activeForm.algorithm === 'random_forest'}
+                    onChange={(event) => updateForm((current) => ({ ...current, useGpu: event.target.checked }))}
+                  />
                 </Box>
               </Paper>
             </Box>
@@ -644,6 +817,8 @@ function FineTune() {
               <ConfusionMatrixPanel title="Baseline confusion matrix" matrix={baselineDetail?.confusionMatrix ?? null} />
               <ConfusionMatrixPanel title="Tuned confusion matrix" matrix={tunedDetailQuery.data?.confusionMatrix ?? null} />
             </Box>
+
+            <FeatureImportanceComparison baseline={baselineDetail} tuned={tunedDetailQuery.data ?? null} />
           </Paper>
         )}
       </Box>

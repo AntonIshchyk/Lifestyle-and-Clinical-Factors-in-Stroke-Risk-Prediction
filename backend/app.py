@@ -491,6 +491,7 @@ def api_models():
     models = []
     for row in rows:
         metrics = json.loads(row["metrics"])
+        metrics.setdefault("classificationThreshold", 0.5)
         models.append({
             "id": row["model_id"],
             "algorithm": row["algorithm"],
@@ -514,6 +515,7 @@ def api_model_detail(model_id: str):
         abort(404, description=f"Model '{model_id}' not found")
 
     metrics = json.loads(row["metrics"])
+    metrics.setdefault("classificationThreshold", 0.5)
     return jsonify({
         "id": model_id,
         "algorithm": row["algorithm"],
@@ -527,6 +529,7 @@ def api_model_detail(model_id: str):
         "featureImportances": json.loads(row["feature_importances"]),
         "rocCurve": json.loads(row["roc_curve"]),
         "featureColumns": json.loads(row["feature_columns"]),
+        "classificationThreshold": metrics["classificationThreshold"],
     })
 
 @app.route("/api/models/<model_id>", methods=["DELETE"])
@@ -545,6 +548,8 @@ def api_delete_model(model_id: str):
         ).fetchone()
         if not row:
             abort(404, description=f"Model '{model_id}' not found")
+        if not _is_tuned_model(row["model_id"]):
+            abort(400, description="Only fine-tuned models can be deleted")
 
         file_deleted = _delete_model_file(row["reference"])
         con.execute("DELETE FROM _model_results WHERE model_id = ?", (model_id,))
@@ -572,7 +577,7 @@ def api_predict(model_id: str):
     with _connect() as con:
         _ensure_schema(con)
         row = con.execute(
-            "SELECT feature_columns FROM _model_results WHERE model_id = ?",
+            "SELECT feature_columns, metrics FROM _model_results WHERE model_id = ?",
             (model_id,),
         ).fetchone()
     if not row:
@@ -586,14 +591,21 @@ def api_predict(model_id: str):
             columns=feature_columns,
         ).apply(pd.to_numeric, errors='coerce')
         classifier = _load_model(model_id)
-        prediction = int(classifier.predict(X)[0])
-        probability = float(classifier.predict_proba(X)[0][1])
+        try:
+            positive_class_index = list(classifier.classes_).index(1)
+        except ValueError as exc:
+            raise ValueError("Classifier does not expose class label 1.") from exc
+        probability = float(classifier.predict_proba(X)[0][positive_class_index])
+        metrics = json.loads(row["metrics"])
+        classification_threshold = float(metrics.get("classificationThreshold", 0.5))
+        prediction = int(probability >= classification_threshold)
     except Exception as exc:
         abort(500, description=str(exc))
 
     return jsonify({
         "prediction": prediction,
         "probability": probability,
+        "classificationThreshold": classification_threshold,
         "label": "Stroke" if prediction == 1 else "No Stroke",
     })
 

@@ -53,6 +53,7 @@ export type ModelDetail = {
   uncertaintyVariant: UncertaintyVariant
   balancingMethod: BalancingMethod
   auc: number
+  classificationThreshold: number
   classificationReport: ClassificationReport
   confusionMatrix: ConfusionMatrix
   featureImportances: FeatureImportance[]

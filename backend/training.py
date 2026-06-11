@@ -21,7 +21,7 @@ from sklearn.metrics import (
     roc_curve,
 )
 from sklearn.model_selection import train_test_split
-from xgboost import XGBClassifier, XGBRFClassifier
+from xgboost import XGBClassifier
 
 try:
     from .registry import _connect, load_dataset, register_model
@@ -235,15 +235,6 @@ def make_classifier(
             ),
             "min_samples_leaf": int(hyperparameters.get("min_samples_leaf", 1)),
         }
-        if use_gpu:
-            return XGBRFClassifier(
-                n_estimators=params["n_estimators"],
-                max_depth=params["max_depth"],
-                eval_metric="logloss",
-                random_state=42,
-                n_jobs=-1,
-                **_xgboost_gpu_params(),
-            )
         return RandomForestClassifier(
             **params,
             random_state=42,
@@ -373,7 +364,12 @@ def train_model(
             raise
         joblib.dump(clf, pkl_path)
 
-    y_prob = clf.predict_proba(X_test)[:, 1]
+    try:
+        positive_class_index = list(clf.classes_).index(1)
+    except ValueError as exc:
+        raise ValueError("Trained classifier does not expose class label 1.") from exc
+
+    y_prob = clf.predict_proba(X_test)[:, positive_class_index]
     y_pred = (y_prob >= classification_threshold).astype(int)
 
     report_raw = classification_report(
@@ -391,6 +387,7 @@ def train_model(
         "f1": f1_score(y_test, y_pred, zero_division=0),
         "precision": precision_score(y_test, y_pred, zero_division=0),
         "recall": recall_score(y_test, y_pred, zero_division=0),
+        "classificationThreshold": classification_threshold,
     }
 
     register_model(
