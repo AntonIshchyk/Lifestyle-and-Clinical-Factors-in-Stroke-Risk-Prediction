@@ -1,12 +1,15 @@
 from pathlib import Path
 from datetime import datetime, timezone
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
+from xml.sax.saxutils import escape
 import threading
 import json
 import uuid
 import joblib
 import numpy as np
 import pandas as pd
-from flask import Flask, abort, jsonify, request, send_from_directory
+from flask import Flask, abort, jsonify, request, send_file, send_from_directory
 
 try:
     from .registry import _connect, _ensure_schema, get_model_path
@@ -28,6 +31,7 @@ _training_jobs: dict[str, dict[str, object]] = {}
 _model_cache_lock = threading.Lock()
 _prediction_log_lock = threading.Lock()
 _training_jobs_lock = threading.Lock()
+_automatic_runs_lock = threading.Lock()
 
 def _load_model(model_id: str):
     if model_id in _model_cache:
@@ -71,11 +75,335 @@ def _public_job(job: dict[str, object]):
     return {key: value for key, value in job.items() if key != "thread"}
 
 
+def _json_payload(value):
+    if value is None:
+        return None
+    return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
+def _load_json_payload(value, fallback):
+    if value is None:
+        return fallback
+    return json.loads(value)
+
+
+def _stroke_risk_score(metrics: dict[str, object]):
+    return (
+        float(metrics.get("auc", 0)) * 0.35
+        + float(metrics.get("f1", 0)) * 0.3
+        + float(metrics.get("recall", 0)) * 0.25
+        + float(metrics.get("precision", 0)) * 0.1
+    )
+
+
+def _xlsx_column_name(index: int):
+    name = ""
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        name = chr(65 + remainder) + name
+    return name
+
+
+def _xlsx_cell(value, row_number: int, column_number: int):
+    reference = f"{_xlsx_column_name(column_number)}{row_number}"
+    if value is None:
+        return f'<c r="{reference}"/>'
+    if isinstance(value, bool):
+        return f'<c r="{reference}" t="b"><v>{1 if value else 0}</v></c>'
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if pd.isna(value):
+            return f'<c r="{reference}"/>'
+        return f'<c r="{reference}"><v>{value}</v></c>'
+    return f'<c r="{reference}" t="inlineStr"><is><t>{escape(str(value))}</t></is></c>'
+
+
+def _xlsx_sheet(rows: list[list[object]]):
+    sheet_rows = []
+    for row_number, row in enumerate(rows, start=1):
+        cells = "".join(
+            _xlsx_cell(value, row_number, column_number)
+            for column_number, value in enumerate(row, start=1)
+        )
+        sheet_rows.append(f'<row r="{row_number}">{cells}</row>')
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<sheetData>{"".join(sheet_rows)}</sheetData>'
+        '</worksheet>'
+    )
+
+
+def _xlsx_workbook(sheets: list[tuple[str, list[list[object]]]]):
+    output = BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+            + "".join(
+                f'<Override PartName="/xl/worksheets/sheet{index}.xml" '
+                'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+                for index in range(1, len(sheets) + 1)
+            )
+            + "</Types>",
+        )
+        archive.writestr(
+            "_rels/.rels",
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+            "</Relationships>",
+        )
+        archive.writestr(
+            "xl/workbook.xml",
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            "<sheets>"
+            + "".join(
+                f'<sheet name="{escape(name[:31])}" sheetId="{index}" r:id="rId{index}"/>'
+                for index, (name, _) in enumerate(sheets, start=1)
+            )
+            + "</sheets></workbook>",
+        )
+        archive.writestr(
+            "xl/_rels/workbook.xml.rels",
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            + "".join(
+                f'<Relationship Id="rId{index}" '
+                'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+                f'Target="worksheets/sheet{index}.xml"/>'
+                for index in range(1, len(sheets) + 1)
+            )
+            + "</Relationships>",
+        )
+        for index, (_, rows) in enumerate(sheets, start=1):
+            archive.writestr(f"xl/worksheets/sheet{index}.xml", _xlsx_sheet(rows))
+    output.seek(0)
+    return output
+
+
+def _safe_export_filename(value: str):
+    return "".join(char if char.isalnum() or char in {"-", "_"} else "_" for char in value)
+
+
+def _model_export_details(model_ids: list[str]):
+    if not model_ids:
+        return {}
+    placeholders = ",".join("?" for _ in model_ids)
+    with _connect() as con:
+        _ensure_schema(con)
+        rows = con.execute(
+            f"""
+            SELECT model_id, confusion_matrix, classification_report
+            FROM _model_results
+            WHERE model_id IN ({placeholders})
+            """,
+            model_ids,
+        ).fetchall()
+    return {
+        row["model_id"]: {
+            "confusionMatrix": json.loads(row["confusion_matrix"]),
+            "classificationReport": json.loads(row["classification_report"]),
+        }
+        for row in rows
+    }
+
+
+def _automatic_run_export_workbook(job: dict[str, object]):
+    result = job.get("result") or {}
+    models = result.get("models", []) if isinstance(result, dict) else []
+    ranked_models = sorted(
+        models,
+        key=lambda model: (
+            _stroke_risk_score(model.get("metrics", {})),
+            float(model.get("metrics", {}).get("auc", 0)),
+            float(model.get("metrics", {}).get("recall", 0)),
+            float(model.get("metrics", {}).get("f1", 0)),
+        ),
+        reverse=True,
+    )
+    details_by_model = _model_export_details([
+        str(model.get("modelId"))
+        for model in ranked_models
+        if model.get("modelId")
+    ])
+    hyperparameter_keys = sorted({
+        key
+        for model in ranked_models
+        for key in (model.get("hyperparameters") or {}).keys()
+    })
+    summary_rows = [
+        ["Field", "Value"],
+        ["Run ID", job["id"]],
+        ["Status", job["status"]],
+        ["Message", job["message"]],
+        ["Created at", job["createdAt"]],
+        ["Started at", job.get("startedAt")],
+        ["Finished at", job.get("finishedAt")],
+        ["Base model ID", (job.get("request") or {}).get("baseModelId")],
+        ["Total combinations", result.get("total") if isinstance(result, dict) else None],
+        ["Trained models", result.get("trained") if isinstance(result, dict) else None],
+        ["Reused models", result.get("reused") if isinstance(result, dict) else None],
+        ["Error", job.get("error")],
+    ]
+    result_header = [
+        "Rank",
+        "Score",
+        "Model ID",
+        "Algorithm",
+        "Dataset ID",
+        "Feature set",
+        "Uncertainty variant",
+        "Balancing method",
+        "Target ratio",
+        "Classification threshold",
+        "AUC-ROC",
+        "Accuracy",
+        "F1",
+        "Precision",
+        "Recall",
+        "True negatives",
+        "False positives",
+        "False negatives",
+        "True positives",
+        *[f"Parameter: {key}" for key in hyperparameter_keys],
+    ]
+    result_rows = [result_header]
+    for rank, model in enumerate(ranked_models, start=1):
+        metrics = model.get("metrics") or {}
+        details = details_by_model.get(model.get("modelId"), {})
+        confusion_matrix = model.get("confusionMatrix") or details.get("confusionMatrix") or {}
+        hyperparameters = model.get("hyperparameters") or {}
+        result_rows.append([
+            rank,
+            _stroke_risk_score(metrics),
+            model.get("modelId"),
+            model.get("algorithm"),
+            model.get("datasetId"),
+            model.get("featureSet"),
+            model.get("uncertaintyVariant"),
+            model.get("balancingMethod"),
+            model.get("targetRatio"),
+            model.get("classificationThreshold"),
+            metrics.get("auc"),
+            metrics.get("accuracy"),
+            metrics.get("f1"),
+            metrics.get("precision"),
+            metrics.get("recall"),
+            confusion_matrix.get("tn"),
+            confusion_matrix.get("fp"),
+            confusion_matrix.get("fn"),
+            confusion_matrix.get("tp"),
+            *[hyperparameters.get(key) for key in hyperparameter_keys],
+        ])
+    return _xlsx_workbook([
+        ("Run summary", summary_rows),
+        ("Model results", result_rows),
+    ])
+
+
+def _automatic_run_summary(job: dict[str, object]):
+    result = job.get("result") or {}
+    models = result.get("models", []) if isinstance(result, dict) else []
+    best = None
+    if models:
+        best = max(
+            models,
+            key=lambda model: (
+                _stroke_risk_score(model.get("metrics", {})),
+                float(model.get("metrics", {}).get("auc", 0)),
+                float(model.get("metrics", {}).get("recall", 0)),
+                float(model.get("metrics", {}).get("f1", 0)),
+            ),
+        )
+
+    return {
+        "id": job["id"],
+        "status": job["status"],
+        "message": job["message"],
+        "createdAt": job["createdAt"],
+        "startedAt": job.get("startedAt"),
+        "finishedAt": job.get("finishedAt"),
+        "baseModelId": (job.get("request") or {}).get("baseModelId"),
+        "total": result.get("total") if isinstance(result, dict) else None,
+        "trained": result.get("trained") if isinstance(result, dict) else None,
+        "reused": result.get("reused") if isinstance(result, dict) else None,
+        "bestModelId": best.get("modelId") if best else None,
+        "bestScore": _stroke_risk_score(best.get("metrics", {})) if best else None,
+        "error": job.get("error"),
+    }
+
+
+def _automatic_run_from_row(row, *, include_result: bool):
+    request_payload = _load_json_payload(row["request_json"], {})
+    result_payload = _load_json_payload(row["result_json"], None)
+    job = {
+        "id": row["job_id"],
+        "status": row["status"],
+        "message": row["message"],
+        "createdAt": row["created_at"],
+        "startedAt": row["started_at"],
+        "finishedAt": row["finished_at"],
+        "request": request_payload,
+        "result": result_payload,
+        "error": row["error"],
+    }
+    return job if include_result else _automatic_run_summary(job)
+
+
+def _persist_automatic_run(job: dict[str, object]):
+    request_payload = job.get("request") or {}
+    if not isinstance(request_payload, dict) or not request_payload.get("automatic"):
+        return
+
+    with _automatic_runs_lock:
+        with _connect() as con:
+            _ensure_schema(con)
+            con.execute(
+                """
+                INSERT INTO _automatic_training_runs
+                    (job_id, base_model_id, status, message, created_at, started_at,
+                     finished_at, request_json, result_json, error)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(job_id) DO UPDATE SET
+                    base_model_id = excluded.base_model_id,
+                    status = excluded.status,
+                    message = excluded.message,
+                    created_at = excluded.created_at,
+                    started_at = excluded.started_at,
+                    finished_at = excluded.finished_at,
+                    request_json = excluded.request_json,
+                    result_json = excluded.result_json,
+                    error = excluded.error
+                """,
+                (
+                    job["id"],
+                    request_payload.get("baseModelId", ""),
+                    job["status"],
+                    job["message"],
+                    job["createdAt"],
+                    job.get("startedAt"),
+                    job.get("finishedAt"),
+                    _json_payload(request_payload),
+                    _json_payload(job.get("result")),
+                    job.get("error"),
+                ),
+            )
+
+
 def _set_job(job_id: str, **updates):
     with _training_jobs_lock:
         job = _training_jobs[job_id]
         job.update(updates)
-        return _public_job(job)
+        public_job = _public_job(job)
+    _persist_automatic_run(public_job)
+    return public_job
 
 
 def _request_list(body: dict[str, object], plural_key: str, singular_key: str):
@@ -123,6 +451,92 @@ def _fine_tune_suffix(payload: dict[str, object]):
     }
     serialized = json.dumps(tuning_payload, sort_keys=True, separators=(",", ":"))
     return f"tuned_{uuid.uuid5(uuid.NAMESPACE_URL, serialized).hex[:10]}"
+
+
+def _clean_model_id_suffix(value):
+    if value is None:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+    if not all(char.isalnum() or char in {"_", "-"} for char in value):
+        abort(400, description="'modelIdSuffix' may only contain letters, digits, underscores, or hyphens")
+    return value
+
+
+def _automatic_uses_gpu(algorithm: str) -> bool:
+    return algorithm in {"xgboost", "lightgbm"}
+
+
+def _automatic_fine_tune_grid(algorithm: str):
+    if algorithm == "random_forest":
+        return [
+            {"n_estimators": n_estimators, "max_depth": max_depth, "min_samples_leaf": min_samples_leaf}
+            for n_estimators in (100, 200, 300)
+            for max_depth in (0, 10, 20)
+            for min_samples_leaf in (1, 2, 4)
+        ]
+    if algorithm == "xgboost":
+        return [
+            {"n_estimators": n_estimators, "max_depth": max_depth, "learning_rate": learning_rate, "subsample": subsample}
+            for n_estimators in (100, 200, 300)
+            for max_depth in (3, 6, 9)
+            for learning_rate in (0.05, 0.1, 0.3)
+            for subsample in (0.8, 1.0)
+        ]
+    if algorithm == "lightgbm":
+        return [
+            {"n_estimators": n_estimators, "max_depth": max_depth, "learning_rate": learning_rate, "num_leaves": num_leaves}
+            for n_estimators in (100, 200, 300)
+            for max_depth in (-1, 10, 20)
+            for learning_rate in (0.05, 0.1, 0.2)
+            for num_leaves in (31, 63)
+        ]
+    raise ValueError(f"Unsupported algorithm '{algorithm}'.")
+
+
+def _automatic_model_specs(base_model_id: str):
+    with _connect() as con:
+        _ensure_schema(con)
+        row = con.execute(
+            """
+            SELECT model_id, algorithm, feature_set, uncertainty_variant, balancing_method
+            FROM _model_results
+            WHERE model_id = ?
+            """,
+            (base_model_id,),
+        ).fetchone()
+    if not row:
+        abort(404, description=f"Model '{base_model_id}' not found")
+    if _is_tuned_model(row["model_id"]):
+        abort(400, description="Automatic fine-tuning can only start from a normal model")
+
+    algorithm = row["algorithm"]
+    dataset_id = f"{row['feature_set']}_{row['uncertainty_variant']}"
+    balancing_method = row["balancing_method"]
+    specs = []
+    for hyperparameters in _automatic_fine_tune_grid(algorithm):
+        for classification_threshold in (0.4, 0.5, 0.6):
+            suffix_payload = {
+                "removedFeatures": [],
+                "hyperparameters": hyperparameters,
+                "targetRatio": 1.0,
+                "classificationThreshold": classification_threshold,
+            }
+            suffix = _fine_tune_suffix(suffix_payload).replace("tuned_", "tuned_auto_", 1)
+            specs.append({
+                "algorithm": algorithm,
+                "datasetId": dataset_id,
+                "balancingMethod": balancing_method,
+                "targetRatio": 1.0,
+                "classificationThreshold": classification_threshold,
+                "forceRetrain": True,
+                "useGpu": _automatic_uses_gpu(algorithm),
+                "removedFeatures": [],
+                "hyperparameters": hyperparameters,
+                "modelIdSuffix": suffix,
+            })
+    return row, specs
 
 
 def _dataset_options():
@@ -182,24 +596,26 @@ def _run_training_job(job_id: str, payload: dict[str, object]):
             algorithm = spec["algorithm"]
             dataset_id = spec["datasetId"]
             balancing_method = spec["balancingMethod"]
+            use_gpu = bool(spec.get("useGpu", payload["useGpu"]))
+            device_label = "GPU" if use_gpu else "CPU"
             _set_job(
                 job_id,
                 message=(
                     f"Training {index}/{total}: "
-                    f"{algorithm} / {dataset_id} / {balancing_method}."
+                    f"{algorithm} / {dataset_id} / {balancing_method} ({device_label})."
                 ),
             )
             result = train_model(
                 algorithm=algorithm,
                 dataset_id=dataset_id,
                 balancing_method=balancing_method,
-                target_ratio=payload["targetRatio"],
-                classification_threshold=payload["classificationThreshold"],
-                force_retrain=payload["forceRetrain"],
-                use_gpu=payload["useGpu"],
-                removed_features=payload.get("removedFeatures", []),
-                hyperparameters=payload.get("hyperparameters", {}),
-                model_id_suffix=payload.get("modelIdSuffix"),
+                target_ratio=spec.get("targetRatio", payload["targetRatio"]),
+                classification_threshold=spec.get("classificationThreshold", payload["classificationThreshold"]),
+                force_retrain=spec.get("forceRetrain", payload["forceRetrain"]),
+                use_gpu=use_gpu,
+                removed_features=spec.get("removedFeatures", payload.get("removedFeatures", [])),
+                hyperparameters=spec.get("hyperparameters", payload.get("hyperparameters", {})),
+                model_id_suffix=spec.get("modelIdSuffix", payload.get("modelIdSuffix")),
             )
             with _model_cache_lock:
                 _model_cache.pop(result["modelId"], None)
@@ -231,6 +647,32 @@ def _run_training_job(job_id: str, payload: dict[str, object]):
             message=str(exc),
             error=str(exc),
         )
+
+
+def _queue_training_job(payload: dict[str, object], message: str = "Training queued."):
+    job_id = uuid.uuid4().hex
+    job = {
+        "id": job_id,
+        "status": "queued",
+        "message": message,
+        "createdAt": _now_iso(),
+        "startedAt": None,
+        "finishedAt": None,
+        "request": payload,
+        "result": None,
+        "error": None,
+    }
+    thread = threading.Thread(
+        target=_run_training_job,
+        args=(job_id, payload),
+        daemon=True,
+    )
+    job["thread"] = thread
+    with _training_jobs_lock:
+        _training_jobs[job_id] = job
+    _persist_automatic_run(_public_job(job))
+    thread.start()
+    return job
 
 @app.route("/api/registry")
 def api_registry():
@@ -354,12 +796,7 @@ def api_start_training_job():
         hyperparameters = {}
     if not isinstance(hyperparameters, dict):
         abort(400, description="'hyperparameters' must be an object")
-    if model_id_suffix is not None:
-        model_id_suffix = str(model_id_suffix).strip()
-        if not model_id_suffix:
-            model_id_suffix = None
-        elif not all(char.isalnum() or char in {"_", "-"} for char in model_id_suffix):
-            abort(400, description="'modelIdSuffix' may only contain letters, digits, underscores, or hyphens")
+    model_id_suffix = _clean_model_id_suffix(model_id_suffix)
 
     if model_specs:
         if not isinstance(model_specs, list):
@@ -368,11 +805,25 @@ def api_start_training_job():
         for spec in model_specs:
             if not isinstance(spec, dict):
                 abort(400, description="'models' must contain objects")
-            normalized_specs.append({
+            normalized_spec = {
                 "algorithm": str(spec.get("algorithm", "")),
                 "datasetId": str(spec.get("datasetId", "")),
                 "balancingMethod": str(spec.get("balancingMethod", "")),
-            })
+            }
+            for key in (
+                "targetRatio",
+                "classificationThreshold",
+                "forceRetrain",
+                "useGpu",
+                "removedFeatures",
+                "hyperparameters",
+                "modelIdSuffix",
+            ):
+                if key in spec:
+                    normalized_spec[key] = spec[key]
+            if "modelIdSuffix" in normalized_spec:
+                normalized_spec["modelIdSuffix"] = _clean_model_id_suffix(normalized_spec["modelIdSuffix"])
+            normalized_specs.append(normalized_spec)
         algorithms = sorted({spec["algorithm"] for spec in normalized_specs})
         dataset_ids = sorted({spec["datasetId"] for spec in normalized_specs})
         balancing_methods = sorted({spec["balancingMethod"] for spec in normalized_specs})
@@ -447,29 +898,105 @@ def api_start_training_job():
         payload["modelIdSuffix"] = model_id_suffix
     if model_specs:
         payload["models"] = normalized_specs
-    job_id = uuid.uuid4().hex
-    job = {
-        "id": job_id,
-        "status": "queued",
-        "message": "Training queued.",
-        "createdAt": _now_iso(),
-        "startedAt": None,
-        "finishedAt": None,
-        "request": payload,
-        "result": None,
-        "error": None,
-    }
-    thread = threading.Thread(
-        target=_run_training_job,
-        args=(job_id, payload),
-        daemon=True,
-    )
-    job["thread"] = thread
-    with _training_jobs_lock:
-        _training_jobs[job_id] = job
-    thread.start()
-
+    job = _queue_training_job(payload)
     return jsonify(_public_job(job)), 202
+
+
+@app.route("/api/training/automatic-jobs", methods=["POST"])
+def api_start_automatic_training_job():
+    body = request.get_json(force=True) or {}
+    model_id = str(body.get("modelId", "")).strip()
+    if not model_id:
+        abort(400, description="'modelId' required in request body")
+
+    base_model, specs = _automatic_model_specs(model_id)
+    payload = {
+        "algorithms": [base_model["algorithm"]],
+        "datasetIds": [f"{base_model['feature_set']}_{base_model['uncertainty_variant']}"],
+        "balancingMethods": [base_model["balancing_method"]],
+        "targetRatio": 1.0,
+        "classificationThreshold": 0.5,
+        "forceRetrain": True,
+        "useGpu": _automatic_uses_gpu(base_model["algorithm"]),
+        "automatic": True,
+        "baseModelId": model_id,
+        "models": specs,
+    }
+    job = _queue_training_job(
+        payload,
+        message=f"Automatic fine-tuning queued for {len(specs)} parameter combinations.",
+    )
+    return jsonify(_public_job(job)), 202
+
+
+@app.route("/api/training/automatic-runs")
+def api_automatic_training_runs():
+    with _connect() as con:
+        _ensure_schema(con)
+        rows = con.execute(
+            """
+            SELECT *
+            FROM _automatic_training_runs
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+    return jsonify([
+        _automatic_run_from_row(row, include_result=False)
+        for row in rows
+    ])
+
+
+@app.route("/api/training/automatic-runs/<job_id>")
+def api_automatic_training_run(job_id: str):
+    with _training_jobs_lock:
+        job = _training_jobs.get(job_id)
+        if job and (job.get("request") or {}).get("automatic"):
+            return jsonify(_public_job(job))
+
+    with _connect() as con:
+        _ensure_schema(con)
+        row = con.execute(
+            "SELECT * FROM _automatic_training_runs WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+    if not row:
+        abort(404, description=f"Automatic training run '{job_id}' not found")
+    return jsonify(_automatic_run_from_row(row, include_result=True))
+
+
+@app.route("/api/training/automatic-runs/<job_id>/export")
+def api_export_automatic_training_run(job_id: str):
+    with _training_jobs_lock:
+        job = _training_jobs.get(job_id)
+        if job and (job.get("request") or {}).get("automatic"):
+            public_job = _public_job(job)
+            workbook = _automatic_run_export_workbook(public_job)
+            filename = f"automatic_fine_tuning_{_safe_export_filename(job_id)}.xlsx"
+            return send_file(
+                workbook,
+                as_attachment=True,
+                download_name=filename,
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+    with _connect() as con:
+        _ensure_schema(con)
+        row = con.execute(
+            "SELECT * FROM _automatic_training_runs WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+    if not row:
+        abort(404, description=f"Automatic training run '{job_id}' not found")
+
+    job = _automatic_run_from_row(row, include_result=True)
+    workbook = _automatic_run_export_workbook(job)
+    filename = f"automatic_fine_tuning_{_safe_export_filename(job_id)}.xlsx"
+    return send_file(
+        workbook,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.route("/api/training/jobs/<job_id>")

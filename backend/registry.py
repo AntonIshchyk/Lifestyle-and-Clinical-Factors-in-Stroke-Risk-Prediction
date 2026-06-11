@@ -35,6 +35,19 @@ def _ensure_schema(con: sqlite3.Connection):
             roc_curve             TEXT NOT NULL,
             feature_columns       TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS _automatic_training_runs (
+            job_id        TEXT PRIMARY KEY,
+            base_model_id TEXT NOT NULL,
+            status        TEXT NOT NULL,
+            message       TEXT NOT NULL,
+            created_at    TEXT NOT NULL,
+            started_at    TEXT,
+            finished_at   TEXT,
+            request_json  TEXT NOT NULL,
+            result_json   TEXT,
+            error         TEXT
+        );
     """)
 
 def register_dataset(name: str, df: pd.DataFrame, label: str | None = None):

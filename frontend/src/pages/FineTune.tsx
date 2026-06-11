@@ -16,12 +16,14 @@ import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import AutoGraphIcon from '@mui/icons-material/AutoGraph'
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import MemoryIcon from '@mui/icons-material/Memory'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import TuneIcon from '@mui/icons-material/Tune'
 import { DataGrid, type GridColDef, type GridRenderCellParams, type GridRowSelectionModel } from '@mui/x-data-grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link as RouterLink } from 'react-router-dom'
 import { fetchJson, postJson } from '../api'
 import {
   ALGORITHM_LABELS,
@@ -532,6 +534,16 @@ function FineTune() {
               </Box>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                component={RouterLink}
+                to="/fine-tune/automatic"
+                variant="outlined"
+                startIcon={<AutoFixHighIcon />}
+                disabled={active}
+                sx={{ minWidth: 132 }}
+              >
+                Automatic
+              </Button>
               <Button
                 variant="outlined"
                 startIcon={<RestartAltIcon />}

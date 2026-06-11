@@ -39,6 +39,7 @@ import {
   type UncertaintyVariant,
 } from '../modelMetadata'
 import { pct } from '../modelData'
+import { strokeRiskScore } from '../modelScoring'
 
 export type ModelRow = {
   id: string
@@ -134,22 +135,6 @@ type ModelComparisonProps = {
   mode?: 'compare' | 'select'
   selectedModelId?: string
   onModelSelect?: (model: ModelRow) => void
-}
-
-const STROKE_SCORE_WEIGHTS = {
-  auc: 0.35,
-  f1: 0.3,
-  recall: 0.25,
-  precision: 0.1,
-} as const
-
-function strokeRiskScore(model: Pick<ModelRow, 'auc' | 'f1' | 'recall' | 'precision'>) {
-  return (
-    model.auc * STROKE_SCORE_WEIGHTS.auc +
-    model.f1 * STROKE_SCORE_WEIGHTS.f1 +
-    model.recall * STROKE_SCORE_WEIGHTS.recall +
-    model.precision * STROKE_SCORE_WEIGHTS.precision
-  )
 }
 
 async function fetchModels(): Promise<ModelRow[]> {

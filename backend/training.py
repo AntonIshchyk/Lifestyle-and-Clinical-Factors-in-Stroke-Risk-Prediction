@@ -275,6 +275,22 @@ def make_classifier(
     raise ValueError(f"Unsupported algorithm '{algorithm}'.")
 
 
+def _assert_gpu_backend_used(clf, algorithm: str) -> None:
+    if algorithm == "xgboost":
+        config = json.loads(clf.get_booster().save_config())
+        device = config.get("learner", {}).get("generic_param", {}).get("device", "")
+        if not str(device).startswith("cuda"):
+            raise RuntimeError(f"XGBoost was requested to use GPU, but trained with device='{device}'.")
+        return
+
+    if algorithm == "lightgbm":
+        device_type = getattr(clf.booster_, "params", {}).get("device_type", "")
+        if str(device_type).lower() != "gpu":
+            raise RuntimeError(
+                f"LightGBM was requested to use GPU, but trained with device_type='{device_type}'."
+            )
+
+
 def train_model(
     *,
     algorithm: str,
@@ -355,11 +371,14 @@ def train_model(
             fit_params.pop("sample_weight", None)
         try:
             clf.fit(X_train_balanced, y_train_balanced, **fit_params)
+            if use_gpu and algorithm in {"xgboost", "lightgbm"}:
+                _assert_gpu_backend_used(clf, algorithm)
         except Exception as exc:
             if use_gpu and algorithm in {"random_forest", "xgboost", "lightgbm"}:
                 raise RuntimeError(
                     f"{ALGORITHMS[algorithm]} GPU training failed. Disable GPU training "
-                    "or verify that the package GPU backend and drivers are installed."
+                    "or verify that the package GPU backend and drivers are installed. "
+                    f"Details: {exc}"
                 ) from exc
             raise
         joblib.dump(clf, pkl_path)
@@ -389,6 +408,22 @@ def train_model(
         "recall": recall_score(y_test, y_pred, zero_division=0),
         "classificationThreshold": classification_threshold,
     }
+    classification_report_payload = {
+        "classes": {
+            k: v
+            for k, v in report_raw.items()
+            if k not in ("accuracy", "macro avg", "weighted avg")
+        },
+        "macro_avg": report_raw["macro avg"],
+        "weighted_avg": report_raw["weighted avg"],
+        "accuracy": report_raw["accuracy"],
+    }
+    confusion_matrix_payload = {
+        "tn": int(cm[0, 0]),
+        "fp": int(cm[0, 1]),
+        "fn": int(cm[1, 0]),
+        "tp": int(cm[1, 1]),
+    }
 
     register_model(
         model_id=model_id,
@@ -398,22 +433,8 @@ def train_model(
         balancing_method=balancing_method,
         model_path=str(pkl_path),
         metrics=metrics,
-        classification_report={
-            "classes": {
-                k: v
-                for k, v in report_raw.items()
-                if k not in ("accuracy", "macro avg", "weighted avg")
-            },
-            "macro_avg": report_raw["macro avg"],
-            "weighted_avg": report_raw["weighted avg"],
-            "accuracy": report_raw["accuracy"],
-        },
-        confusion_matrix={
-            "tn": int(cm[0, 0]),
-            "fp": int(cm[0, 1]),
-            "fn": int(cm[1, 0]),
-            "tp": int(cm[1, 1]),
-        },
+        classification_report=classification_report_payload,
+        confusion_matrix=confusion_matrix_payload,
         feature_importances=[
             {"feature": col, "importance": float(imp)}
             for col, imp in zip(X.columns, importances)
@@ -431,10 +452,13 @@ def train_model(
         "balancingMethod": balancing_method,
         "targetRatio": target_ratio,
         "classificationThreshold": classification_threshold,
+        "useGpu": use_gpu,
         "reusedExistingModel": reused,
         "reusedBalancedData": balance_cache_hit,
         "removedFeatures": valid_removed_features,
         "hyperparameters": hyperparameters or {},
         "metrics": metrics,
+        "classificationReport": classification_report_payload,
+        "confusionMatrix": confusion_matrix_payload,
         "balanceInfo": _sanitized_balance_info(balance_info),
     }
