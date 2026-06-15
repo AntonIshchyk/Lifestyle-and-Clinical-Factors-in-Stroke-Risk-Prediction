@@ -6,14 +6,13 @@
 pip install -r requirements.txt
 ```
 
-GPU training is enabled in `ai_module/main.ipynb` and the backend training API.
-Random Forest uses XGBoost's GPU-backed random-forest classifier when GPU training
-is enabled, while CPU training still uses scikit-learn's RandomForestClassifier.
-XGBoost and LightGBM also use their GPU backends.
+GPU training is enabled in `ai_module/main.ipynb` and the backend training API
+for XGBoost and LightGBM. Random Forest always uses scikit-learn's
+RandomForestClassifier on CPU.
 If GPU training fails, check that your NVIDIA drivers/CUDA setup are available
 for XGBoost and that LightGBM was installed with GPU support. Existing saved
-models are reused by default, so enable force retraining when replacing old CPU
-Random Forest models with GPU-trained ones.
+models are reused by default, so enable force retraining when replacing old
+models.
 
 2. Run the notebook to generate the datasets and models
 

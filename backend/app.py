@@ -594,7 +594,7 @@ def _automatic_fine_tune_grid(algorithm: str):
         return [
             {"n_estimators": n_estimators, "max_depth": max_depth, "min_samples_leaf": min_samples_leaf}
             for n_estimators in (100, 200, 300)
-            for max_depth in (0, 10, 20)
+            for max_depth in (6, 10, 20)
             for min_samples_leaf in (1, 2, 4)
         ]
     if algorithm == "xgboost":
@@ -717,7 +717,7 @@ def _run_training_job(job_id: str, payload: dict[str, object]):
             algorithm = spec["algorithm"]
             dataset_id = spec["datasetId"]
             balancing_method = spec["balancingMethod"]
-            use_gpu = bool(spec.get("useGpu", payload["useGpu"]))
+            use_gpu = bool(spec.get("useGpu", payload["useGpu"])) and _automatic_uses_gpu(algorithm)
             device_label = "GPU" if use_gpu else "CPU"
             _set_job(
                 job_id,
@@ -1001,6 +1001,10 @@ def api_start_training_job():
     ]
     if invalid_dataset_ids:
         abort(400, description=f"Unknown dataset id(s): {', '.join(invalid_dataset_ids)}")
+
+    for spec in normalized_specs:
+        if spec["algorithm"] == "random_forest":
+            spec["useGpu"] = False
 
     payload = {
         "algorithms": algorithms,

@@ -116,7 +116,7 @@ const defaultForm = (model: ModelRow | null): TuneForm => ({
   classificationThreshold: model?.classificationThreshold ?? 0.5,
   useGpu: model?.algorithm === 'random_forest' ? false : true,
   nEstimators: model?.algorithm === 'random_forest' ? 200 : 100,
-  maxDepth: model?.algorithm === 'random_forest' ? 0 : model?.algorithm === 'lightgbm' ? -1 : 6,
+  maxDepth: model?.algorithm === 'random_forest' ? 6 : model?.algorithm === 'lightgbm' ? -1 : 6,
   learningRate: model?.algorithm === 'xgboost' ? 0.3 : 0.1,
   minSamplesLeaf: 1,
   subsample: 1,
@@ -634,7 +634,7 @@ function FineTune() {
                         updateForm((current) => ({
                           ...current,
                           algorithm,
-                          maxDepth: algorithm === 'random_forest' ? 0 : algorithm === 'lightgbm' ? -1 : current.maxDepth < 1 ? 6 : current.maxDepth,
+                          maxDepth: algorithm === 'random_forest' ? 6 : algorithm === 'lightgbm' ? -1 : current.maxDepth < 1 ? 6 : current.maxDepth,
                           learningRate: algorithm === 'xgboost' ? 0.3 : algorithm === 'lightgbm' ? 0.1 : current.learningRate,
                           nEstimators: algorithm === 'random_forest' ? 200 : current.nEstimators,
                           useGpu: algorithm === 'random_forest' ? false : current.useGpu,
@@ -678,9 +678,7 @@ function FineTune() {
                     value={activeForm.maxDepth}
                     disabled={active}
                     helperText={
-                      activeForm.algorithm === 'random_forest'
-                        ? '0 keeps Random Forest unrestricted'
-                        : activeForm.algorithm === 'lightgbm'
+                      activeForm.algorithm === 'lightgbm'
                           ? '-1 keeps LightGBM unrestricted'
                           : undefined
                     }

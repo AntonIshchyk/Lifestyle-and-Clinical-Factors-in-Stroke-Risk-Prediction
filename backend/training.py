@@ -226,13 +226,10 @@ def make_classifier(
     hyperparameters = hyperparameters or {}
 
     if algorithm == "random_forest":
+        max_depth = hyperparameters.get("max_depth", 6)
         params = {
             "n_estimators": int(hyperparameters.get("n_estimators", 200)),
-            "max_depth": (
-                None
-                if hyperparameters.get("max_depth") in (None, "", 0, "0")
-                else int(hyperparameters["max_depth"])
-            ),
+            "max_depth": 6 if max_depth in (None, "", 0, "0") else int(max_depth),
             "min_samples_leaf": int(hyperparameters.get("min_samples_leaf", 1)),
         }
         return RandomForestClassifier(
@@ -306,6 +303,8 @@ def train_model(
 ) -> dict[str, object]:
     if algorithm not in ALGORITHMS:
         raise ValueError(f"Unsupported algorithm '{algorithm}'.")
+    if algorithm == "random_forest":
+        use_gpu = False
     if balancing_method not in BALANCING_STRATEGIES:
         raise ValueError(f"Unsupported balancing method '{balancing_method}'.")
     if balancing_method == "weighted":
@@ -367,14 +366,14 @@ def train_model(
             hyperparameters=hyperparameters,
         )
         fit_params = dict(balance_info.get("fit_params", {}))
-        if algorithm == "random_forest" and balancing_method == "weighted" and not use_gpu:
+        if algorithm == "random_forest" and balancing_method == "weighted":
             fit_params.pop("sample_weight", None)
         try:
             clf.fit(X_train_balanced, y_train_balanced, **fit_params)
             if use_gpu and algorithm in {"xgboost", "lightgbm"}:
                 _assert_gpu_backend_used(clf, algorithm)
         except Exception as exc:
-            if use_gpu and algorithm in {"random_forest", "xgboost", "lightgbm"}:
+            if use_gpu and algorithm in {"xgboost", "lightgbm"}:
                 raise RuntimeError(
                     f"{ALGORITHMS[algorithm]} GPU training failed. Disable GPU training "
                     "or verify that the package GPU backend and drivers are installed. "

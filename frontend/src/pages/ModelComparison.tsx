@@ -86,6 +86,7 @@ type TrainingSpec = {
   featureSet?: FeatureSet
   uncertaintyVariant?: UncertaintyVariant
   balancingMethod: BalancingMethod
+  useGpu?: boolean
 }
 
 type TrainingModelResult = {
@@ -586,6 +587,10 @@ function MissingStatisticsPanel() {
 
   const trainMissing = (models: TrainingSpec[]) => {
     if (!models.length || active) return
+    const trainingModels = models.map((model) => ({
+      ...model,
+      useGpu: model.algorithm !== 'random_forest',
+    }))
     startMutation.mutate({
       algorithms: [],
       datasetIds: [],
@@ -593,7 +598,7 @@ function MissingStatisticsPanel() {
       targetRatio: 1,
       forceRetrain: false,
       useGpu: true,
-      models,
+      models: trainingModels,
     })
   }
 
