@@ -39,7 +39,6 @@ import {
   type UncertaintyVariant,
 } from '../modelMetadata'
 import { pct } from '../modelData'
-import { strokeRiskScore } from '../modelScoring'
 
 export type ModelRow = {
   id: string
@@ -304,82 +303,6 @@ function useColumns({
       },
     }] : []),
   ], [allowDelete, deletingModelId, onDelete])
-}
-
-function ModelOverview({ models }: { models: ModelRow[] }) {
-  const topModels = useMemo(() => {
-    return models
-      .map((model) => ({
-        model,
-        score: strokeRiskScore(model),
-      }))
-      .sort((left, right) => (
-        right.score - left.score ||
-        right.model.auc - left.model.auc ||
-        right.model.recall - left.model.recall ||
-        right.model.f1 - left.model.f1
-      ))
-      .slice(0, 3)
-  }, [models])
-
-  return (
-    <Paper elevation={0} sx={{ borderRadius: 2, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
-      <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-        <Box>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Top 3 overall models</Typography>
-          <Typography variant="caption" color="text.secondary">Ranked for stroke risk prediction</Typography>
-        </Box>
-        <Chip
-          label="Score = 0.35 AUC + 0.30 F1 + 0.25 recall + 0.10 precision"
-          size="small"
-          variant="outlined"
-          sx={{ borderRadius: 1, maxWidth: '100%', '& .MuiChip-label': { whiteSpace: 'normal' } }}
-        />
-      </Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5, bgcolor: 'grey.50', p: 1.5 }}>
-        {topModels.length > 0 ? topModels.map(({ model, score }, index) => (
-          <Box key={model.id} sx={{ p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1.5, mb: 1.5 }}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Rank {index + 1}</Typography>
-                <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 700, lineHeight: 1.25 }}>
-                  {ALGORITHM_LABELS[model.algorithm]}
-                </Typography>
-              </Box>
-              <Chip label={`Score ${score.toFixed(3)}`} size="small" color={index === 0 ? 'primary' : 'default'} sx={{ borderRadius: 1 }} />
-            </Box>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.75 }}>
-              <Chip label={FEATURE_SET_LABELS[model.featureSet]} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
-              <Chip label={UNCERTAINTY_VARIANT_LABELS[model.uncertaintyVariant]} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
-              <Chip label={BALANCING_METHOD_LABELS[model.balancingMethod]} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
-            </Box>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 1.25 }}>
-              <Box>
-                <Typography variant="caption" color="text.secondary">AUC-ROC</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{model.auc.toFixed(3)}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">F1</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{model.f1.toFixed(3)}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Recall</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{pct(model.recall)}</Typography>
-              </Box>
-              <Box>
-                <Typography variant="caption" color="text.secondary">Precision</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>{pct(model.precision)}</Typography>
-              </Box>
-            </Box>
-          </Box>
-        )) : (
-          <Box sx={{ p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-            <Typography variant="body2" color="text.secondary">No trained models available yet.</Typography>
-          </Box>
-        )}
-      </Box>
-    </Paper>
-  )
 }
 
 function TrainingPanel() {
@@ -1185,7 +1108,6 @@ function ModelComparison({
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         <TrainingPanel />
         <MissingStatisticsPanel />
-        <ModelOverview models={models} />
         {content}
       </Box>
     </main>
