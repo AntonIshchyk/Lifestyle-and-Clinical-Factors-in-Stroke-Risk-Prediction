@@ -316,10 +316,8 @@ function ShapExplanationPanel({
 
   const increasing = explanation.features
     .filter((feature) => feature.contribution > 0)
-    .slice(0, 5)
   const decreasing = explanation.features
     .filter((feature) => feature.contribution < 0)
-    .slice(0, 5)
   const maxContribution = Math.max(
     ...[...increasing, ...decreasing].map((feature) => feature.absContribution),
     0.0001,
