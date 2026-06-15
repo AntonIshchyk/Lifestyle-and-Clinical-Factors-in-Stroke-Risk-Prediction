@@ -155,6 +155,30 @@ def dataset_options() -> list[dict[str, str]]:
     return datasets
 
 
+def _require_registered_datasets(dataset_ids: list[str]) -> None:
+    registered_dataset_ids = {dataset["id"] for dataset in dataset_options()}
+    missing_dataset_ids = [
+        dataset_id for dataset_id in dataset_ids
+        if dataset_id not in registered_dataset_ids
+    ]
+    if not missing_dataset_ids:
+        return
+
+    registered_message = (
+        ", ".join(sorted(registered_dataset_ids))
+        if registered_dataset_ids
+        else "none"
+    )
+    missing_message = ", ".join(missing_dataset_ids)
+    raise RuntimeError(
+        "Required training datasets are not registered: "
+        f"{missing_message}. Run ai_module/main.ipynb from top to bottom first "
+        "so it creates and registers the feature datasets in backend/healthcare.db, "
+        "then rerun this notebook. "
+        f"Currently registered datasets: {registered_message}."
+    )
+
+
 def expected_data_balanced_model_specs(
     datasets: list[dict[str, str]] | None = None,
 ) -> list[dict[str, str]]:
@@ -303,6 +327,7 @@ def train_final_models(
 ) -> dict[str, object]:
     dataset_ids = dataset_ids or FINAL_MODEL_DATASET_IDS
     configs = configs or FINAL_MODEL_CONFIGS
+    _require_registered_datasets(dataset_ids)
 
     combinations = [
         {**config, "datasetId": dataset_id}
