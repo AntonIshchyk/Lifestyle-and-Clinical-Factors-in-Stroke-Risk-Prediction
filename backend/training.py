@@ -33,6 +33,7 @@ PROJECT_ROOT = BASE_DIR.parent
 AI_MODULE_DIR = PROJECT_ROOT / "ai_module"
 MODELS_DIR = AI_MODULE_DIR / "models"
 TUNED_MODELS_DIR = AI_MODULE_DIR / "tuned-models"
+DATA_BALANCED_MODELS_DIR = AI_MODULE_DIR / "data-balance-models"
 BALANCED_CACHE_DIR = AI_MODULE_DIR / "balanced_training_cache"
 
 if str(AI_MODULE_DIR.resolve()) not in sys.path:
@@ -300,6 +301,7 @@ def train_model(
     removed_features: list[str] | None = None,
     hyperparameters: dict[str, object] | None = None,
     model_id_suffix: str | None = None,
+    model_output_dir: str | Path | None = None,
 ) -> dict[str, object]:
     if algorithm not in ALGORITHMS:
         raise ValueError(f"Unsupported algorithm '{algorithm}'.")
@@ -351,7 +353,7 @@ def train_model(
         if model_id_suffix
         else base_model_id
     )
-    model_dir = TUNED_MODELS_DIR if model_id_suffix else MODELS_DIR
+    model_dir = Path(model_output_dir) if model_output_dir else (TUNED_MODELS_DIR if model_id_suffix else MODELS_DIR)
     model_dir.mkdir(exist_ok=True)
     pkl_path = (model_dir / f"{model_id}.pkl").resolve()
 

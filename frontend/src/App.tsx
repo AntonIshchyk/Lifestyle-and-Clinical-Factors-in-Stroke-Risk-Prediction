@@ -10,8 +10,6 @@ const ModelCompare = lazy(() => import('./pages/ModelCompare'))
 const Patients = lazy(() => import('./pages/Patients'))
 const PredictionLab = lazy(() => import('./pages/Predict'))
 const FineTune = lazy(() => import('./pages/FineTune'))
-const AutomaticFineTune = lazy(() => import('./pages/AutomaticFineTune'))
-const AutomaticFineTuneRuns = lazy(() => import('./pages/AutomaticFineTuneRuns'))
 
 function App() {
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -63,9 +61,6 @@ function App() {
           <Route path="/models/compare" element={<ModelCompare />} />
           <Route path="/models/:id" element={<ModelDetail />} />
           <Route path="/fine-tune" element={<FineTune />} />
-          <Route path="/fine-tune/automatic" element={<AutomaticFineTune />} />
-          <Route path="/fine-tune/automatic/runs" element={<AutomaticFineTuneRuns />} />
-          <Route path="/fine-tune/automatic/runs/:id" element={<AutomaticFineTuneRuns />} />
         </Routes>
       </Suspense>
     </main>
