@@ -9,7 +9,6 @@ const ModelComparison = lazy(() => import('./pages/ModelComparison'))
 const ModelCompare = lazy(() => import('./pages/ModelCompare'))
 const Patients = lazy(() => import('./pages/Patients'))
 const PredictionLab = lazy(() => import('./pages/Predict'))
-const FineTune = lazy(() => import('./pages/FineTune'))
 
 function App() {
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -35,9 +34,6 @@ function App() {
             <NavLink to="/models" className={linkClass}>
               Model Comparison
             </NavLink>
-            <NavLink to="/fine-tune" className={linkClass}>
-              Fine-tuning
-            </NavLink>
           </nav>
           <div className="flex flex-1 justify-end">
             <Link href="https://www.cdc.gov/brfss/annual_data/annual_2024.html" target="_blank" rel="noreferrer" underline="hover" className="text-xs text-slate-500 whitespace-nowrap">
@@ -60,7 +56,6 @@ function App() {
           <Route path="/models" element={<ModelComparison />} />
           <Route path="/models/compare" element={<ModelCompare />} />
           <Route path="/models/:id" element={<ModelDetail />} />
-          <Route path="/fine-tune" element={<FineTune />} />
         </Routes>
       </Suspense>
     </main>
