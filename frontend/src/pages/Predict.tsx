@@ -25,6 +25,26 @@ type PredictionResponse = {
   prediction: number
   probability: number
   label: string
+  explanation?: ShapExplanation | null
+  explanationError?: string
+}
+
+type ShapFeatureContribution = {
+  feature: string
+  value: number | null
+  contribution: number
+  absContribution: number
+  direction: 'increases' | 'decreases'
+}
+
+type ShapExplanation = {
+  modelOutput: 'probability'
+  classLabel: string
+  baseValue: number
+  outputValue: number
+  sumValue: number
+  backgroundRows: number | null
+  features: ShapFeatureContribution[]
 }
 
 type PredictionLogPayload = {
@@ -182,6 +202,11 @@ function formatRisk(value: number) {
   return `${(value * 100).toFixed(2)}%`
 }
 
+function formatSignedProbabilityPoints(value: number) {
+  const sign = value >= 0 ? '+' : '-'
+  return `${sign}${Math.abs(value * 100).toFixed(2)} pp`
+}
+
 function buildFeatures(row: Record<string, string>, model: ModelDetail) {
   return Object.fromEntries(
     model.featureColumns.map((column) => [column, parseModelValue(row[column])]),
@@ -203,6 +228,131 @@ function ResultPanel({ title, result }: { title: string; result: PredictionRespo
       <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
         {result ? 'Predicted probability of stroke' : 'Run prediction'}
       </Typography>
+    </Box>
+  )
+}
+
+function ShapContributionRows({
+  contributions,
+  featureByKey,
+  maxContribution,
+}: {
+  contributions: ShapFeatureContribution[]
+  featureByKey: Map<string, LabFeature>
+  maxContribution: number
+}) {
+  if (!contributions.length) {
+    return (
+      <Typography variant="body2" color="text.secondary">
+        No matching SHAP drivers in this direction.
+      </Typography>
+    )
+  }
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      {contributions.map((item) => {
+        const feature = featureByKey.get(item.feature) ?? makeFeature(item.feature)
+        const width = `${Math.max(4, Math.min(100, item.absContribution / maxContribution * 100))}%`
+        const isIncrease = item.contribution >= 0
+
+        return (
+          <Box key={item.feature} sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'minmax(160px, 1fr) 1fr 76px' }, gap: 1, alignItems: 'center' }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.15 }}>{feature.label}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {featureText(feature, item.value)}
+              </Typography>
+            </Box>
+            <Box sx={{ height: 8, borderRadius: 1, bgcolor: 'grey.100', overflow: 'hidden' }}>
+              <Box sx={{ height: '100%', width, bgcolor: isIncrease ? 'error.main' : 'success.main' }} />
+            </Box>
+            <Typography
+              variant="caption"
+              color={isIncrease ? 'error.dark' : 'success.dark'}
+              sx={{ fontWeight: 700, textAlign: { xs: 'left', sm: 'right' }, fontVariantNumeric: 'tabular-nums' }}
+            >
+              {formatSignedProbabilityPoints(item.contribution)}
+            </Typography>
+          </Box>
+        )
+      })}
+    </Box>
+  )
+}
+
+function ShapExplanationPanel({
+  title,
+  result,
+  featureByKey,
+}: {
+  title: string
+  result: PredictionResponse | null
+  featureByKey: Map<string, LabFeature>
+}) {
+  const explanation = result?.explanation ?? null
+
+  if (!result) {
+    return (
+      <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 1.5 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{title}</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+          Run prediction to calculate local SHAP values.
+        </Typography>
+      </Box>
+    )
+  }
+
+  if (!explanation) {
+    return (
+      <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 1.5 }}>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{title}</Typography>
+        <Typography variant="body2" color="error" sx={{ mt: 0.75 }}>
+          {result.explanationError ?? 'No SHAP explanation was returned for this prediction.'}
+        </Typography>
+      </Box>
+    )
+  }
+
+  const increasing = explanation.features
+    .filter((feature) => feature.contribution > 0)
+  const decreasing = explanation.features
+    .filter((feature) => feature.contribution < 0)
+  const maxContribution = Math.max(
+    ...[...increasing, ...decreasing].map((feature) => feature.absContribution),
+    0.0001,
+  )
+
+  return (
+    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, p: 1.5 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', mb: 1.25 }}>
+        <Box>
+          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{title}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            Baseline {formatRisk(explanation.baseValue)} to prediction {formatRisk(explanation.outputValue)}
+          </Typography>
+        </Box>
+        <Chip
+          size="small"
+          label={explanation.backgroundRows ? `${explanation.backgroundRows} background rows` : 'Tree path SHAP'}
+          sx={{ alignSelf: 'flex-start' }}
+        />
+      </Box>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 2 }}>
+        <Box>
+          <Typography variant="caption" color="error.dark" sx={{ display: 'block', mb: 0.75, fontWeight: 700, textTransform: 'uppercase' }}>
+            Pushes risk up
+          </Typography>
+          <ShapContributionRows contributions={increasing} featureByKey={featureByKey} maxContribution={maxContribution} />
+        </Box>
+        <Box>
+          <Typography variant="caption" color="success.dark" sx={{ display: 'block', mb: 0.75, fontWeight: 700, textTransform: 'uppercase' }}>
+            Pulls risk down
+          </Typography>
+          <ShapContributionRows contributions={decreasing} featureByKey={featureByKey} maxContribution={maxContribution} />
+        </Box>
+      </Box>
     </Box>
   )
 }
@@ -321,8 +471,8 @@ function Predict() {
       const changedFeatures = activeFeatures.filter((feature) => !sameModelValue(baselineFeatures[feature.key], scenarioFeatures[feature.key]))
       const predictUrl = `/api/models/${activeModel.id}/predict`
       const predictionResults = await Promise.allSettled([
-        postJson<PredictionResponse>(predictUrl, { features: baselineFeatures }),
-        postJson<PredictionResponse>(predictUrl, { features: scenarioFeatures }),
+        postJson<PredictionResponse>(predictUrl, { features: baselineFeatures, explain: true }),
+        postJson<PredictionResponse>(predictUrl, { features: scenarioFeatures, explain: true }),
         ...changedFeatures.map((feature) => postJson<PredictionResponse>(predictUrl, {
           features: { ...baselineFeatures, [feature.key]: scenarioFeatures[feature.key] },
         })),
@@ -583,6 +733,15 @@ function Predict() {
         {activeStep === 1 && patientTable}
         {activeStep === 2 && featureTable}
         {activeStep === 3 && summary}
+
+        {activeStep === 3 && (
+          <SectionCard title="SHAP Local Explanation">
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', xl: '1fr 1fr' }, gap: 2 }}>
+              <ShapExplanationPanel title="Initial patient" result={result?.baseline ?? null} featureByKey={featureByKey} />
+              <ShapExplanationPanel title="Changed scenario" result={result?.scenario ?? null} featureByKey={featureByKey} />
+            </Box>
+          </SectionCard>
+        )}
 
         {activeStep === 3 && (
           <SectionCard title="Feature-Level Risk Changes">
