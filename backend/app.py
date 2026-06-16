@@ -675,25 +675,6 @@ def _is_tuned_model(model_id: str):
     return "__tuned_" in model_id
 
 
-def _delete_model_file(model_path: str | None):
-    if not model_path:
-        return False
-
-    resolved_path = Path(model_path).resolve()
-    try:
-        resolved_path.relative_to(AI_MODULE_DIR.resolve())
-    except ValueError:
-        abort(500, description="Refusing to delete a model file outside ai_module")
-
-    if not resolved_path.exists():
-        return False
-    if not resolved_path.is_file():
-        abort(500, description="Model path is not a file")
-
-    resolved_path.unlink()
-    return True
-
-
 def _fine_tune_suffix(payload: dict[str, object]):
     tuning_payload = {
         "removedFeatures": sorted(payload.get("removedFeatures", [])),
@@ -1318,41 +1299,6 @@ def api_model_detail(model_id: str):
         "rocCurve": json.loads(row["roc_curve"]),
         "featureColumns": json.loads(row["feature_columns"]),
         "classificationThreshold": metrics["classificationThreshold"],
-    })
-
-@app.route("/api/models/<model_id>", methods=["DELETE"])
-def api_delete_model(model_id: str):
-    with _connect() as con:
-        _ensure_schema(con)
-        row = con.execute(
-            """
-            SELECT m.model_id, r.reference
-            FROM _model_results m
-            LEFT JOIN _registry r
-                ON r.id = m.model_id AND r.type = 'model'
-            WHERE m.model_id = ?
-            """,
-            (model_id,),
-        ).fetchone()
-        if not row:
-            abort(404, description=f"Model '{model_id}' not found")
-        if not _is_tuned_model(row["model_id"]):
-            abort(400, description="Only fine-tuned models can be deleted")
-
-        file_deleted = _delete_model_file(row["reference"])
-        con.execute("DELETE FROM _model_results WHERE model_id = ?", (model_id,))
-        con.execute(
-            "DELETE FROM _registry WHERE id = ? AND type = 'model'",
-            (model_id,),
-        )
-
-    with _model_cache_lock:
-        _model_cache.pop(model_id, None)
-
-    return jsonify({
-        "ok": True,
-        "modelId": model_id,
-        "fileDeleted": file_deleted,
     })
 
 @app.route("/api/models/<model_id>/predict", methods=["POST"])

@@ -22,18 +22,6 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export async function deleteJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    method: 'DELETE',
-  })
-
-  if (!response.ok) {
-    throw new Error(await responseMessage(response))
-  }
-
-  return response.json() as Promise<T>
-}
-
 async function responseMessage(response: Response): Promise<string> {
   const fallback = `Request failed with status ${response.status}`
   const text = await response.text()

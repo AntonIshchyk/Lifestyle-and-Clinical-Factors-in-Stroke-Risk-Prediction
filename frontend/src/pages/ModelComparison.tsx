@@ -1,22 +1,14 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogTitle from '@mui/material/DialogTitle'
-import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
-import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
-import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
-import { DataGrid, type GridColDef, type GridRenderCellParams, type GridRowParams, type GridRowSelectionModel } from '@mui/x-data-grid'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { deleteJson, fetchJson } from '../api'
+import { DataGrid, type GridColDef, type GridRowParams, type GridRowSelectionModel } from '@mui/x-data-grid'
+import { useQuery } from '@tanstack/react-query'
+import { fetchJson } from '../api'
 import {
   ALGORITHM_LABELS,
   BALANCING_METHOD_LABELS,
@@ -51,33 +43,13 @@ type ModelComparisonProps = {
   onModelSelect?: (model: ModelRow) => void
 }
 
+const EMPTY_MODELS: ModelRow[] = []
+
 async function fetchModels(): Promise<ModelRow[]> {
   return fetchJson<ModelRow[]>('/api/models')
 }
 
-type DeleteModelResult = {
-  ok: boolean
-  modelId: string
-  fileDeleted: boolean
-}
-
-async function deleteModel(modelId: string): Promise<DeleteModelResult> {
-  return deleteJson(`/api/models/${encodeURIComponent(modelId)}`)
-}
-
-async function deleteModels(modelIds: string[]): Promise<DeleteModelResult[]> {
-  return Promise.all(modelIds.map(deleteModel))
-}
-
-function useColumns({
-  allowDelete = false,
-  deletingModelId = '',
-  onDelete,
-}: {
-  allowDelete?: boolean
-  deletingModelId?: string
-  onDelete?: (model: ModelRow) => void
-} = {}): GridColDef[] {
+function useColumns(): GridColDef[] {
   return useMemo<GridColDef[]>(() => [
     {
       field: 'algorithm',
@@ -168,40 +140,7 @@ function useColumns({
       headerAlign: 'left',
       valueFormatter: (value) => pct(value as number),
     },
-    ...(allowDelete ? [{
-      field: 'actions',
-      headerName: '',
-      width: 64,
-      sortable: false,
-      filterable: false,
-      disableColumnMenu: true,
-      align: 'center' as const,
-      headerAlign: 'center' as const,
-      renderCell: ({ row }: GridRenderCellParams<ModelRow>) => {
-        const model = row as ModelRow
-        if (!model.isTuned) return null
-
-        return (
-          <Tooltip title="Delete fine-tuned model">
-            <span>
-              <IconButton
-                size="small"
-                color="error"
-                disabled={deletingModelId === model.id}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onDelete?.(model)
-                }}
-                aria-label={`Delete ${model.id}`}
-              >
-                <DeleteOutlinedIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-        )
-      },
-    }] : []),
-  ], [allowDelete, deletingModelId, onDelete])
+  ], [])
 }
 
 function ModelListSection({
@@ -214,10 +153,9 @@ function ModelListSection({
   rowSelectionModel,
   onSelectionChange,
   onRowClick,
-  actions,
 }: {
   title: string
-  subtitle: string
+  subtitle?: string
   rows: ModelRow[]
   columns: GridColDef[]
   loading: boolean
@@ -225,7 +163,6 @@ function ModelListSection({
   rowSelectionModel: GridRowSelectionModel
   onSelectionChange: (rows: ModelRow[], model: GridRowSelectionModel) => void
   onRowClick: (params: GridRowParams) => void
-  actions?: ReactNode
 }) {
   return (
     <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
@@ -244,10 +181,9 @@ function ModelListSection({
       >
         <Box>
           <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{title}</Typography>
-          <Typography variant="caption" color="text.secondary">{subtitle}</Typography>
+          {subtitle && <Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          {actions}
           <Chip label={`${rows.length} model${rows.length === 1 ? '' : 's'}`} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
         </Box>
       </Box>
@@ -296,9 +232,7 @@ function ModelComparison({
   onModelSelect,
 }: ModelComparisonProps) {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({ type: 'include', ids: new Set() })
-  const [deleteTargets, setDeleteTargets] = useState<ModelRow[]>([])
 
   const query = useQuery({
     queryKey: ['models'],
@@ -306,44 +240,17 @@ function ModelComparison({
     staleTime: 30_000,
   })
 
-  const models = query.data ?? []
+  const models = query.data ?? EMPTY_MODELS
   const normalModels = useMemo(() => models.filter((model) => !model.isTuned), [models])
-  const tunedModels = useMemo(() => models.filter((model) => model.isTuned), [models])
   const loading = query.isLoading || query.isFetching
   const error = query.isError ? 'Could not load models from the backend.' : ''
   const selectedIds = useMemo(
     () => (selectionModel.type === 'include' ? [...selectionModel.ids].map(String) : []),
     [selectionModel],
   )
-  const selectedTunedModels = useMemo(
-    () => tunedModels.filter((model) => selectedIds.includes(model.id)),
-    [selectedIds, tunedModels],
-  )
   const canCompare = selectedIds.length >= 2
   const selectMode = mode === 'select'
-  const deleteMutation = useMutation({
-    mutationFn: deleteModels,
-    onSuccess: (results) => {
-      const deletedIds = new Set(results.map((result) => result.modelId))
-      setSelectionModel((current) => {
-        if (current.type !== 'include') return current
-        const ids = new Set(current.ids)
-        deletedIds.forEach((id) => ids.delete(id))
-        return { type: 'include', ids }
-      })
-      setDeleteTargets([])
-      queryClient.invalidateQueries({ queryKey: ['models'] })
-    },
-  })
-  const deletingModelIds = useMemo(
-    () => new Set(deleteMutation.variables ?? []),
-    [deleteMutation.variables],
-  )
-  const columns = useColumns({
-    allowDelete: !selectMode,
-    deletingModelId: [...deletingModelIds][0] ?? '',
-    onDelete: (model) => setDeleteTargets([model]),
-  })
+  const columns = useColumns()
   const rowSelectionModel: GridRowSelectionModel = selectMode
     ? selectedModelId
       ? { type: 'include', ids: new Set([selectedModelId]) }
@@ -374,11 +281,6 @@ function ModelComparison({
       nextIds.forEach((id) => ids.add(id))
       return { type: 'include', ids }
     })
-  }
-
-  const confirmDelete = () => {
-    if (!deleteTargets.length || deleteMutation.isPending) return
-    deleteMutation.mutate(deleteTargets.map((model) => model.id))
   }
 
   const content = (
@@ -419,75 +321,17 @@ function ModelComparison({
           <Typography variant="body2" color="error">{error}</Typography>
         </Paper>
       ) : (
-        <>
-          <ModelListSection
-            title="Normal models"
-            subtitle="Baseline trained models saved in the regular model folder."
-            rows={normalModels}
-            columns={columns}
-            loading={loading}
-            selectMode={selectMode}
-            rowSelectionModel={rowSelectionModel}
-            onSelectionChange={handleSectionSelectionChange}
-            onRowClick={handleRowClick}
-          />
-          <ModelListSection
-            title="Fine-tuned models"
-            subtitle="Tuned runs saved separately in the tuned-models folder."
-            rows={tunedModels}
-            columns={columns}
-            loading={loading}
-            selectMode={selectMode}
-            rowSelectionModel={rowSelectionModel}
-            onSelectionChange={handleSectionSelectionChange}
-            onRowClick={handleRowClick}
-            actions={!selectMode && (
-              <Button
-                size="small"
-                color="error"
-                variant="outlined"
-                startIcon={<DeleteOutlinedIcon />}
-                disabled={!selectedTunedModels.length || deleteMutation.isPending}
-                onClick={() => setDeleteTargets(selectedTunedModels)}
-              >
-                Delete selected ({selectedTunedModels.length})
-              </Button>
-            )}
-          />
-        </>
+        <ModelListSection
+          title="Models"
+          rows={normalModels}
+          columns={columns}
+          loading={loading}
+          selectMode={selectMode}
+          rowSelectionModel={rowSelectionModel}
+          onSelectionChange={handleSectionSelectionChange}
+          onRowClick={handleRowClick}
+        />
       )}
-
-      {deleteMutation.isError && (
-        <Alert severity="error">{deleteMutation.error.message}</Alert>
-      )}
-
-      <Dialog open={deleteTargets.length > 0} onClose={() => !deleteMutation.isPending && setDeleteTargets([])} maxWidth="xs" fullWidth>
-        <DialogTitle>{deleteTargets.length === 1 ? 'Delete model?' : 'Delete models?'}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            This removes the fine-tuned model file{deleteTargets.length === 1 ? '' : 's'} and database records. This cannot be undone.
-          </Typography>
-          {deleteTargets.length > 0 && (
-            <Typography variant="body2" sx={{ mt: 1.5, fontWeight: 700, wordBreak: 'break-word' }}>
-              {deleteTargets.length === 1
-                ? deleteTargets[0].id
-                : `${deleteTargets.length} fine-tuned models selected`}
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button disabled={deleteMutation.isPending} onClick={() => setDeleteTargets([])}>Cancel</Button>
-          <Button
-            color="error"
-            variant="contained"
-            startIcon={<DeleteOutlinedIcon />}
-            disabled={deleteMutation.isPending}
-            onClick={confirmDelete}
-          >
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 
