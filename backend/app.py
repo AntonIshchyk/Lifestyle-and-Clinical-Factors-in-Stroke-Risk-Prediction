@@ -34,6 +34,7 @@ _shap_cache_lock = threading.Lock()
 _prediction_log_lock = threading.Lock()
 _training_jobs_lock = threading.Lock()
 _automatic_runs_lock = threading.Lock()
+SHAP_BACKGROUND_ROWS = 64
 
 def _load_model(model_id: str):
     if model_id in _model_cache:
