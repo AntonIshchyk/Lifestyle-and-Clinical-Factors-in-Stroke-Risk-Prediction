@@ -91,13 +91,11 @@ def _load_shap_background(metadata: dict, feature_columns: list[str], fallback: 
     except Exception:
         return fallback
 
-    background = background.apply(pd.to_numeric, errors="coerce")
     for col in feature_columns:
         if col not in background.columns:
             background[col] = np.nan
 
-    background = background[feature_columns]
-    return background.fillna(background.median(numeric_only=True)).fillna(0)
+    return background[feature_columns]
 
 
 def _load_shap_explainer(model_id: str, classifier, metadata: dict, feature_columns: list[str], X: pd.DataFrame):
