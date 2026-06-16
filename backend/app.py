@@ -27,8 +27,9 @@ PREDICTION_LOG_PATH = BASE_DIR / "prediction_log.txt"
 AI_MODULE_DIR = PROJECT_ROOT / "ai_module"
 
 _model_cache: dict[str, object] = {}
-_training_jobs: dict[str, dict[str, object]] = {}
+_shap_cache: dict[str, dict[str, object]] = {}
 _model_cache_lock = threading.Lock()
+_shap_cache_lock = threading.Lock()
 _prediction_log_lock = threading.Lock()
 _training_jobs_lock = threading.Lock()
 _automatic_runs_lock = threading.Lock()
@@ -53,6 +54,151 @@ def _display(value):
     if isinstance(value, float):
         return str(int(value)) if value.is_integer() else f"{value:.4g}"
     return str(value)
+
+
+def _quote_identifier(identifier: str) -> str:
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _json_number(value):
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if np.isfinite(numeric) else None
+
+
+def _positive_class_index(classifier) -> int:
+    classes = list(getattr(classifier, "classes_", []))
+    if 1 in classes:
+        return classes.index(1)
+    return 1 if len(classes) > 1 else 0
+
+
+def _load_shap_background(metadata: dict, feature_columns: list[str], fallback: pd.DataFrame) -> pd.DataFrame:
+    dataset_id = f"{metadata['feature_set']}_{metadata['uncertainty_variant']}"
+
+    try:
+        with _connect() as con:
+            row = con.execute(
+                "SELECT reference FROM _registry WHERE id = ? AND type = 'dataset'",
+                (dataset_id,),
+            ).fetchone()
+            if not row:
+                return fallback
+
+            table_name = row["reference"]
+            available_columns = {
+                column["name"]
+                for column in con.execute(f"PRAGMA table_info({_quote_identifier(table_name)})").fetchall()
+            }
+            selected_columns = [column for column in feature_columns if column in available_columns]
+            if not selected_columns:
+                return fallback
+
+            sql = (
+                f"SELECT {', '.join(_quote_identifier(column) for column in selected_columns)} "
+                f"FROM {_quote_identifier(table_name)} LIMIT ?"
+            )
+            background = pd.read_sql_query(sql, con, params=(SHAP_BACKGROUND_ROWS,))
+    except Exception:
+        return fallback
+
+    background = background.apply(pd.to_numeric, errors="coerce")
+    for column in feature_columns:
+        if column not in background.columns:
+            background[column] = np.nan
+
+    background = background[feature_columns]
+    return background.fillna(background.median(numeric_only=True)).fillna(0)
+
+
+def _load_shap_explainer(model_id: str, classifier, metadata: dict, feature_columns: list[str], X: pd.DataFrame):
+    if model_id in _shap_cache:
+        return _shap_cache[model_id]
+
+    with _shap_cache_lock:
+        if model_id in _shap_cache:
+            return _shap_cache[model_id]
+
+        import shap
+
+        if metadata["algorithm"] == "random_forest":
+            explainer = shap.TreeExplainer(classifier)
+            background_rows = None
+        else:
+            background = _load_shap_background(metadata, feature_columns, X)
+            explainer = shap.TreeExplainer(
+                classifier,
+                data=background,
+                model_output="probability",
+                feature_perturbation="interventional",
+            )
+            background_rows = len(background)
+
+        _shap_cache[model_id] = {
+            "explainer": explainer,
+            "backgroundRows": background_rows,
+        }
+        return _shap_cache[model_id]
+
+
+def _extract_positive_shap_values(explainer, classifier, X: pd.DataFrame):
+    class_index = _positive_class_index(classifier)
+    shap_values = explainer.shap_values(X, check_additivity=False)
+    expected_value = np.asarray(explainer.expected_value).reshape(-1)
+
+    if isinstance(shap_values, list):
+        values = np.asarray(shap_values[class_index])[0]
+        base_value = expected_value[class_index] if len(expected_value) > class_index else expected_value[-1]
+        return values, base_value
+
+    values_array = np.asarray(shap_values)
+    if values_array.ndim == 3:
+        if values_array.shape[0] == len(X):
+            values = values_array[0, :, class_index]
+        else:
+            values = values_array[class_index, 0, :]
+        base_value = expected_value[class_index] if len(expected_value) > class_index else expected_value[-1]
+        return values, base_value
+
+    if values_array.ndim == 2:
+        base_value = expected_value[class_index] if len(expected_value) > class_index else expected_value[-1]
+        return values_array[0], base_value
+
+    raise ValueError("Unsupported SHAP value shape")
+
+
+def _build_shap_explanation(model_id: str, classifier, metadata: dict, feature_columns: list[str], X: pd.DataFrame, probability: float):
+    cache_entry = _load_shap_explainer(model_id, classifier, metadata, feature_columns, X)
+    values, base_value = _extract_positive_shap_values(cache_entry["explainer"], classifier, X)
+
+    contributions = []
+    row = X.iloc[0]
+    for feature, contribution in zip(feature_columns, values):
+        contribution_value = _json_number(contribution) or 0.0
+        contributions.append({
+            "feature": feature,
+            "value": _json_number(row[feature]),
+            "contribution": contribution_value,
+            "absContribution": abs(contribution_value),
+            "direction": "increases" if contribution_value >= 0 else "decreases",
+        })
+
+    contributions.sort(key=lambda item: item["absContribution"], reverse=True)
+    base = _json_number(base_value) or 0.0
+
+    return {
+        "modelOutput": "probability",
+        "classLabel": "Stroke",
+        "baseValue": base,
+        "outputValue": probability,
+        "sumValue": base + sum(item["contribution"] for item in contributions),
+        "backgroundRows": cache_entry["backgroundRows"],
+        "features": contributions,
+    }
 
 
 def _append_prediction_log(entry: dict):
@@ -1233,13 +1379,18 @@ def api_predict(model_id: str):
     with _connect() as con:
         _ensure_schema(con)
         row = con.execute(
-            "SELECT feature_columns, metrics FROM _model_results WHERE model_id = ?",
+            "SELECT algorithm, feature_set, uncertainty_variant, feature_columns FROM _model_results WHERE model_id = ?",
             (model_id,),
         ).fetchone()
     if not row:
         abort(404, description=f"Model '{model_id}' not found")
 
     feature_columns = json.loads(row["feature_columns"])
+    metadata = {
+        "algorithm": row["algorithm"],
+        "feature_set": row["feature_set"],
+        "uncertainty_variant": row["uncertainty_variant"],
+    }
 
     try:
         X = pd.DataFrame(
@@ -1258,12 +1409,28 @@ def api_predict(model_id: str):
     except Exception as exc:
         abort(500, description=str(exc))
 
-    return jsonify({
+    response = {
         "prediction": prediction,
         "probability": probability,
         "classificationThreshold": classification_threshold,
         "label": "Stroke" if prediction == 1 else "No Stroke",
-    })
+    }
+
+    if body.get("explain"):
+        try:
+            response["explanation"] = _build_shap_explanation(
+                model_id,
+                classifier,
+                metadata,
+                feature_columns,
+                X,
+                probability,
+            )
+        except Exception as exc:
+            response["explanation"] = None
+            response["explanationError"] = f"SHAP explanation failed: {exc}"
+
+    return jsonify(response)
 
 
 @app.route("/api/predictions/log", methods=["POST"])
