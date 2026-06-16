@@ -431,6 +431,147 @@ def train_final_models(
     }
 
 
+def final_model_id(config: dict[str, object], dataset_id: str) -> str:
+    return f"{config['algorithm']}_weighted_{dataset_id}__final_{config['profile']}"
+
+
+def expected_final_model_ids(
+    *,
+    dataset_ids: list[str] | None = None,
+    configs: list[dict[str, object]] | None = None,
+) -> list[str]:
+    dataset_ids = dataset_ids or FINAL_MODEL_DATASET_IDS
+    configs = configs or FINAL_MODEL_CONFIGS
+    return [
+        final_model_id(config, dataset_id)
+        for dataset_id in dataset_ids
+        for config in configs
+    ]
+
+
+def _registered_final_models(model_ids: list[str]) -> dict[str, object]:
+    if not model_ids:
+        return {}
+
+    placeholders = ", ".join("?" for _ in model_ids)
+    query = f"""
+        SELECT
+            registry.id AS model_id,
+            registry.reference AS model_path,
+            results.algorithm,
+            results.feature_set,
+            results.uncertainty_variant,
+            results.balancing_method,
+            results.metrics,
+            results.classification_report,
+            results.confusion_matrix,
+            results.feature_importances,
+            results.roc_curve,
+            results.feature_columns
+        FROM _registry AS registry
+        JOIN _model_results AS results ON results.model_id = registry.id
+        WHERE registry.type = 'model'
+          AND registry.id IN ({placeholders})
+    """
+    with _connect() as con:
+        _ensure_schema(con)
+        rows = con.execute(query, model_ids).fetchall()
+    return {row["model_id"]: row for row in rows}
+
+
+def _final_result_from_registered_models(
+    *,
+    registered_models: dict[str, object],
+    dataset_ids: list[str],
+    configs: list[dict[str, object]],
+    use_gpu: bool,
+) -> dict[str, object]:
+    models = []
+    for dataset_id in dataset_ids:
+        for config in configs:
+            model_id = final_model_id(config, dataset_id)
+            row = registered_models[model_id]
+            metrics = json.loads(row["metrics"])
+            models.append({
+                "modelId": model_id,
+                "algorithm": row["algorithm"],
+                "datasetId": dataset_id,
+                "featureSet": row["feature_set"],
+                "uncertaintyVariant": row["uncertainty_variant"],
+                "balancingMethod": row["balancing_method"],
+                "classificationThreshold": metrics.get(
+                    "classificationThreshold",
+                    config["classificationThreshold"],
+                ),
+                "useGpu": use_gpu,
+                "reusedExistingModel": True,
+                "modelPath": row["model_path"],
+                "hyperparameters": config["hyperparameters"],
+                "metrics": metrics,
+                "classificationReport": json.loads(row["classification_report"]),
+                "confusionMatrix": json.loads(row["confusion_matrix"]),
+                "featureImportances": json.loads(row["feature_importances"]),
+                "rocCurve": json.loads(row["roc_curve"]),
+                "featureColumns": json.loads(row["feature_columns"]),
+            })
+
+    return {
+        "models": models,
+        "total": len(models),
+        "trained": 0,
+        "reused": len(models),
+        "configs": configs,
+        "datasetIds": dataset_ids,
+        "modelOutputDir": str(MODELS_DIR),
+    }
+
+
+def train_or_reuse_final_models(
+    *,
+    dataset_ids: list[str] | None = None,
+    configs: list[dict[str, object]] | None = None,
+    force_retrain: bool = False,
+    use_gpu: bool = True,
+    status: StatusCallback = print,
+) -> dict[str, object]:
+    dataset_ids = dataset_ids or FINAL_MODEL_DATASET_IDS
+    configs = configs or FINAL_MODEL_CONFIGS
+    model_ids = expected_final_model_ids(dataset_ids=dataset_ids, configs=configs)
+    missing_model_files = [
+        MODELS_DIR / f"{model_id}.pkl"
+        for model_id in model_ids
+        if not (MODELS_DIR / f"{model_id}.pkl").exists()
+    ]
+    registered_models = _registered_final_models(model_ids)
+    missing_registered_models = [
+        model_id for model_id in model_ids if model_id not in registered_models
+    ]
+
+    if not force_retrain and not missing_model_files and not missing_registered_models:
+        status(f"All {len(model_ids)} final models already exist in {MODELS_DIR}. Skipping training.")
+        return _final_result_from_registered_models(
+            registered_models=registered_models,
+            dataset_ids=dataset_ids,
+            configs=configs,
+            use_gpu=use_gpu,
+        )
+
+    if force_retrain:
+        status("FORCE_RETRAIN=True, so final models will be retrained.")
+    elif missing_model_files:
+        status(f"Missing {len(missing_model_files)} model file(s); training/reusing final models as needed.")
+    else:
+        status(f"Missing {len(missing_registered_models)} registry row(s); reusing model files and refreshing metrics.")
+
+    return train_final_models(
+        dataset_ids=dataset_ids,
+        configs=configs,
+        force_retrain=force_retrain,
+        use_gpu=use_gpu,
+        status=status,
+    )
+
+
 def automatic_fine_tune_grid(algorithm: str) -> list[dict[str, object]]:
     if algorithm == "random_forest":
         return [
