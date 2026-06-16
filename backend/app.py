@@ -12,10 +12,10 @@ import pandas as pd
 from flask import Flask, abort, jsonify, request, send_file, send_from_directory
 
 try:
-    from .registry import _connect, _ensure_schema, get_model_path
+    from .registry import _connect, _ensure_schema, get_model_path, load_dataset
     from .training import ALGORITHMS, BALANCING_STRATEGIES, parse_dataset_id, train_model
 except ImportError:
-    from registry import _connect, _ensure_schema, get_model_path
+    from registry import _connect, _ensure_schema, get_model_path, load_dataset
     from training import ALGORITHMS, BALANCING_STRATEGIES, parse_dataset_id, train_model
 
 app = Flask(__name__)
@@ -83,35 +83,18 @@ def _load_shap_background(metadata: dict, feature_columns: list[str], fallback: 
     dataset_id = f"{metadata['feature_set']}_{metadata['uncertainty_variant']}"
 
     try:
-        with _connect() as con:
-            row = con.execute(
-                "SELECT reference FROM _registry WHERE id = ? AND type = 'dataset'",
-                (dataset_id,),
-            ).fetchone()
-            if not row:
-                return fallback
-
-            table_name = row["reference"]
-            available_columns = {
-                column["name"]
-                for column in con.execute(f"PRAGMA table_info({_quote_identifier(table_name)})").fetchall()
-            }
-            selected_columns = [column for column in feature_columns if column in available_columns]
-            if not selected_columns:
-                return fallback
-
-            sql = (
-                f"SELECT {', '.join(_quote_identifier(column) for column in selected_columns)} "
-                f"FROM {_quote_identifier(table_name)} LIMIT ?"
-            )
-            background = pd.read_sql_query(sql, con, params=(SHAP_BACKGROUND_ROWS,))
+        df = load_dataset(dataset_id)
+        selected_columns = [col for col in feature_columns if col in df.columns]
+        if not selected_columns:
+            return fallback
+        background = df[selected_columns].head(SHAP_BACKGROUND_ROWS).copy()
     except Exception:
         return fallback
 
     background = background.apply(pd.to_numeric, errors="coerce")
-    for column in feature_columns:
-        if column not in background.columns:
-            background[column] = np.nan
+    for col in feature_columns:
+        if col not in background.columns:
+            background[col] = np.nan
 
     background = background[feature_columns]
     return background.fillna(background.median(numeric_only=True)).fillna(0)
@@ -966,18 +949,19 @@ def api_data(name: str):
         if not row:
             abort(404, description=f"Dataset '{name}' not found")
 
-        table_name = row["reference"]
-        columns = [c["name"] for c in con.execute(f'PRAGMA table_info("{table_name}")').fetchall()]
-        total = con.execute(f'SELECT COUNT(*) FROM "{table_name}"').fetchone()[0]
-        rows = con.execute(
-            f'SELECT * FROM "{table_name}" LIMIT ? OFFSET ?',
-            (per_page, offset),
-        ).fetchall()
+    try:
+        df = load_dataset(name)
+    except Exception as exc:
+        abort(500, description=str(exc))
+
+    columns = list(df.columns)
+    total = len(df)
+    page_df = df.iloc[offset:offset + per_page]
 
     return jsonify({
         "name": name,
         "columns": columns,
-        "rows": [{column: _display(row[column]) for column in columns} for row in rows],
+        "rows": [{col: _display(row[col]) for col in columns} for _, row in page_df.iterrows()],
         "page": page,
         "per_page": per_page,
         "total": total,
@@ -1381,7 +1365,7 @@ def api_predict(model_id: str):
     with _connect() as con:
         _ensure_schema(con)
         row = con.execute(
-            "SELECT algorithm, feature_set, uncertainty_variant, feature_columns FROM _model_results WHERE model_id = ?",
+            "SELECT algorithm, feature_set, uncertainty_variant, feature_columns, metrics FROM _model_results WHERE model_id = ?",
             (model_id,),
         ).fetchone()
     if not row:

@@ -84,14 +84,13 @@ def dataset_cache_metadata(dataset_id: str) -> dict[str, object]:
         ).fetchone()
         if not row:
             raise KeyError(f"Dataset '{dataset_id}' not found")
-        table_name = row["reference"]
-        row_count = con.execute(f'SELECT COUNT(*) FROM "{table_name}"').fetchone()[0]
 
+    df = load_dataset(dataset_id)
     return {
         "dataset_id": dataset_id,
-        "table_name": table_name,
+        "reference": row["reference"],
         "created_at": row["created_at"],
-        "row_count": int(row_count),
+        "row_count": len(df),
     }
 
 

@@ -1,0 +1,1088 @@
+{
+  "baseline": {
+    "classificationThreshold": 0.4,
+    "explanation": {
+      "backgroundRows": 64,
+      "baseValue": 0.5813168406266687,
+      "classLabel": "Stroke",
+      "features": [
+        {
+          "absContribution": 0.10931841899419917,
+          "contribution": 0.10931841899419917,
+          "direction": "increases",
+          "feature": "_MICHD",
+          "value": null
+        },
+        {
+          "absContribution": 0.0867188416145373,
+          "contribution": -0.0867188416145373,
+          "direction": "decreases",
+          "feature": "GENHLTH",
+          "value": 2
+        },
+        {
+          "absContribution": 0.08107587935238714,
+          "contribution": -0.08107587935238714,
+          "direction": "decreases",
+          "feature": "EMPLOY1",
+          "value": 1
+        },
+        {
+          "absContribution": 0.061757185304042096,
+          "contribution": -0.061757185304042096,
+          "direction": "decreases",
+          "feature": "_AGE80",
+          "value": 59
+        },
+        {
+          "absContribution": 0.04344828194897908,
+          "contribution": 0.04344828194897908,
+          "direction": "increases",
+          "feature": "_LCSCTSN",
+          "value": null
+        },
+        {
+          "absContribution": 0.0348223579401956,
+          "contribution": 0.0348223579401956,
+          "direction": "increases",
+          "feature": "CVDINFR4",
+          "value": null
+        },
+        {
+          "absContribution": 0.019898051735310663,
+          "contribution": 0.019898051735310663,
+          "direction": "increases",
+          "feature": "RMVTETH4",
+          "value": null
+        },
+        {
+          "absContribution": 0.018708039021000773,
+          "contribution": 0.018708039021000773,
+          "direction": "increases",
+          "feature": "PHYSHLTH",
+          "value": 30
+        },
+        {
+          "absContribution": 0.013463869091140942,
+          "contribution": -0.013463869091140942,
+          "direction": "decreases",
+          "feature": "PRIMINS2",
+          "value": 1
+        },
+        {
+          "absContribution": 0.010492018974225635,
+          "contribution": 0.010492018974225635,
+          "direction": "increases",
+          "feature": "DIABETE4",
+          "value": null
+        },
+        {
+          "absContribution": 0.008923805672496116,
+          "contribution": 0.008923805672496116,
+          "direction": "increases",
+          "feature": "LASTDEN4",
+          "value": null
+        },
+        {
+          "absContribution": 0.006669865579495736,
+          "contribution": 0.006669865579495736,
+          "direction": "increases",
+          "feature": "BLIND",
+          "value": null
+        },
+        {
+          "absContribution": 0.006011320736296448,
+          "contribution": -0.006011320736296448,
+          "direction": "decreases",
+          "feature": "INCOME3",
+          "value": null
+        },
+        {
+          "absContribution": 0.005417207202836993,
+          "contribution": 0.005417207202836993,
+          "direction": "increases",
+          "feature": "CHCKDNY2",
+          "value": null
+        },
+        {
+          "absContribution": 0.0039088946633441405,
+          "contribution": 0.0039088946633441405,
+          "direction": "increases",
+          "feature": "MARITAL",
+          "value": 6
+        },
+        {
+          "absContribution": 0.0034230741415622185,
+          "contribution": 0.0034230741415622185,
+          "direction": "increases",
+          "feature": "DIFFALON",
+          "value": null
+        },
+        {
+          "absContribution": 0.002372503912908306,
+          "contribution": -0.002372503912908306,
+          "direction": "decreases",
+          "feature": "DIFFWALK",
+          "value": null
+        },
+        {
+          "absContribution": 0.002284175625958645,
+          "contribution": 0.002284175625958645,
+          "direction": "increases",
+          "feature": "CNCRTYP2",
+          "value": null
+        },
+        {
+          "absContribution": 0.0020258559236717355,
+          "contribution": 0.0020258559236717355,
+          "direction": "increases",
+          "feature": "EDUCA",
+          "value": 5
+        },
+        {
+          "absContribution": 0.0013634753560635997,
+          "contribution": 0.0013634753560635997,
+          "direction": "increases",
+          "feature": "_BMI5",
+          "value": 22.53
+        },
+        {
+          "absContribution": 0.0011804570304372864,
+          "contribution": 0.0011804570304372864,
+          "direction": "increases",
+          "feature": "HADHYST2",
+          "value": null
+        },
+        {
+          "absContribution": 0.001175160654010697,
+          "contribution": 0.001175160654010697,
+          "direction": "increases",
+          "feature": "DECIDE",
+          "value": null
+        },
+        {
+          "absContribution": 0.0011517844515063194,
+          "contribution": -0.0011517844515063194,
+          "direction": "decreases",
+          "feature": "_LCSELIG",
+          "value": null
+        },
+        {
+          "absContribution": 0.0006760676981297265,
+          "contribution": -0.0006760676981297265,
+          "direction": "decreases",
+          "feature": "PERSDOC3",
+          "value": 3
+        },
+        {
+          "absContribution": 0.0006404035405804764,
+          "contribution": -0.0006404035405804764,
+          "direction": "decreases",
+          "feature": "CNCRAGE",
+          "value": null
+        },
+        {
+          "absContribution": 0.000511859183227353,
+          "contribution": -0.000511859183227353,
+          "direction": "decreases",
+          "feature": "_RACE",
+          "value": 1
+        },
+        {
+          "absContribution": 0.00046667313786793736,
+          "contribution": -0.00046667313786793736,
+          "direction": "decreases",
+          "feature": "DEAF",
+          "value": null
+        },
+        {
+          "absContribution": 0.00039239143915108444,
+          "contribution": -0.00039239143915108444,
+          "direction": "decreases",
+          "feature": "CDDISCU1",
+          "value": null
+        },
+        {
+          "absContribution": 0.00024159981685076493,
+          "contribution": -0.00024159981685076493,
+          "direction": "decreases",
+          "feature": "_ASTHMS1",
+          "value": null
+        },
+        {
+          "absContribution": 0.0001460943261563414,
+          "contribution": 0.0001460943261563414,
+          "direction": "increases",
+          "feature": "DIABAGE4",
+          "value": null
+        },
+        {
+          "absContribution": 0.00011635464400791624,
+          "contribution": 0.00011635464400791624,
+          "direction": "increases",
+          "feature": "HAVARTH4",
+          "value": null
+        },
+        {
+          "absContribution": 7.816842142210179e-05,
+          "contribution": 7.816842142210179e-05,
+          "direction": "increases",
+          "feature": "MENTHLTH",
+          "value": 0
+        },
+        {
+          "absContribution": 3.506147992724849e-05,
+          "contribution": 3.506147992724849e-05,
+          "direction": "increases",
+          "feature": "ADDEPEV3",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "_STATE",
+          "value": 1
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CHCOCNC1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CHCCOPD3",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "VETERAN3",
+          "value": 1
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "PREGNANT",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "DIFFDRES",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "FLUSHOT7",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "PNEUVAC4",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "PDIABTS1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "PREDIAB2",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "DIABTYPE",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "INSULIN1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "EYEEXAM1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "DIABEYE1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "DIABEDU1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "FEETSORE",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CNCRDIFF",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CSRVTRT3",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CSRVPAIN",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CIMEMLO1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CDWORRY",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CDHOUS1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CDSOCIA1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "SOMALE",
+          "value": 2
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "SOFEMALE",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "_URBSTAT",
+          "value": 1
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "_SEX",
+          "value": 1
+        }
+      ],
+      "modelOutput": "probability",
+      "outputValue": 0.599271297454834,
+      "sumValue": 0.5992712806833445
+    },
+    "label": "Stroke",
+    "prediction": 1,
+    "probability": 0.599271297454834
+  },
+  "baselineFeatures": {
+    "ADDEPEV3": null,
+    "BLIND": null,
+    "CDDISCU1": null,
+    "CDHOUS1": null,
+    "CDSOCIA1": null,
+    "CDWORRY": null,
+    "CHCCOPD3": null,
+    "CHCKDNY2": null,
+    "CHCOCNC1": null,
+    "CIMEMLO1": null,
+    "CNCRAGE": null,
+    "CNCRDIFF": null,
+    "CNCRTYP2": null,
+    "CSRVPAIN": null,
+    "CSRVTRT3": null,
+    "CVDINFR4": null,
+    "DEAF": null,
+    "DECIDE": null,
+    "DIABAGE4": null,
+    "DIABEDU1": null,
+    "DIABETE4": null,
+    "DIABEYE1": null,
+    "DIABTYPE": null,
+    "DIFFALON": null,
+    "DIFFDRES": null,
+    "DIFFWALK": null,
+    "EDUCA": 5,
+    "EMPLOY1": 1,
+    "EYEEXAM1": null,
+    "FEETSORE": null,
+    "FLUSHOT7": null,
+    "GENHLTH": 2,
+    "HADHYST2": null,
+    "HAVARTH4": null,
+    "INCOME3": null,
+    "INSULIN1": null,
+    "LASTDEN4": null,
+    "MARITAL": 6,
+    "MENTHLTH": 0,
+    "PDIABTS1": null,
+    "PERSDOC3": 3,
+    "PHYSHLTH": 30,
+    "PNEUVAC4": null,
+    "PREDIAB2": null,
+    "PREGNANT": null,
+    "PRIMINS2": 1,
+    "RMVTETH4": null,
+    "SOFEMALE": null,
+    "SOMALE": 2,
+    "VETERAN3": 1,
+    "_AGE80": 59,
+    "_ASTHMS1": null,
+    "_BMI5": 22.53,
+    "_LCSCTSN": null,
+    "_LCSELIG": null,
+    "_MICHD": null,
+    "_RACE": 1,
+    "_SEX": 1,
+    "_STATE": 1,
+    "_URBSTAT": 1
+  },
+  "changedFeatures": [
+    {
+      "after": 2,
+      "before": null,
+      "key": "BLIND",
+      "label": "BLIND"
+    }
+  ],
+  "model": {
+    "algorithm": "xgboost",
+    "balancingMethod": "weighted",
+    "featureSet": "clinical",
+    "id": "xgboost_weighted_clinical_with_uncertain__final_low_false_negative",
+    "metrics": {
+      "accuracy": 0.622901231861821,
+      "auc": 0.8267749420981074,
+      "f1Score": 0.17328207592503603,
+      "precision": 0.09619078104993598,
+      "recall": 0.8727008712487899
+    }
+  },
+  "patient": {
+    "absoluteIndex": 3,
+    "datasetId": "lifestyle_with_uncertain",
+    "datasetLabel": "Lifestyle With Uncertain",
+    "page": 1,
+    "perPage": 10,
+    "row": {
+      "ACEADNED": "-",
+      "ACEADSAF": "-",
+      "ACEDEPRS": "-",
+      "ACEDIVRC": "-",
+      "ACEDRINK": "-",
+      "ACEDRUGS": "-",
+      "ACEHURT1": "-",
+      "ACEHVSEX": "-",
+      "ACEPRISN": "-",
+      "ACEPUNCH": "-",
+      "ACESWEAR": "-",
+      "ACETOUCH": "-",
+      "ACETTHEM": "-",
+      "CVDSTRK3": "0",
+      "ECIGNOW3": "1",
+      "EDUCA": "5",
+      "EMPLOY1": "1",
+      "EMTSUPRT": "2",
+      "GENHLTH": "2",
+      "HOWSAFE1": "1",
+      "INCOME3": "-",
+      "LCSFIRST": "14",
+      "LCSLAST_": "-",
+      "LCSNUMC_": "15",
+      "LSATISFY": "1",
+      "MARIJAN1": "-",
+      "MARITAL": "6",
+      "MENTHLTH": "0",
+      "PERSDOC3": "3",
+      "PHYSHLTH": "30",
+      "PREGNANT": "-",
+      "PRIMINS2": "1",
+      "SDHEMPLY": "2",
+      "SDLONELY": "5",
+      "SOFEMALE": "-",
+      "SOMALE": "2",
+      "SSBFRUT3": "-",
+      "SSBSUGR2": "-",
+      "VETERAN3": "1",
+      "_AGE80": "59",
+      "_BMI5": "22.53",
+      "_DRNKWK3": "14",
+      "_LCSYQTS": "-",
+      "_LCSYSMK": "45",
+      "_RACE": "1",
+      "_SEX": "1",
+      "_SMOKER3": "1",
+      "_STATE": "1",
+      "_TOTINDA": "1",
+      "_URBSTAT": "1"
+    },
+    "rowId": "lifestyle_with_uncertain-1-2",
+    "rowIndex": 2
+  },
+  "scenario": {
+    "classificationThreshold": 0.4,
+    "explanation": {
+      "backgroundRows": 64,
+      "baseValue": 0.5813168406266687,
+      "classLabel": "Stroke",
+      "features": [
+        {
+          "absContribution": 0.10980148427321484,
+          "contribution": 0.10980148427321484,
+          "direction": "increases",
+          "feature": "_MICHD",
+          "value": null
+        },
+        {
+          "absContribution": 0.08733420134144003,
+          "contribution": -0.08733420134144003,
+          "direction": "decreases",
+          "feature": "GENHLTH",
+          "value": 2
+        },
+        {
+          "absContribution": 0.08162958266387256,
+          "contribution": -0.08162958266387256,
+          "direction": "decreases",
+          "feature": "EMPLOY1",
+          "value": 1
+        },
+        {
+          "absContribution": 0.06211727222182832,
+          "contribution": -0.06211727222182832,
+          "direction": "decreases",
+          "feature": "_AGE80",
+          "value": 59
+        },
+        {
+          "absContribution": 0.04346329724014753,
+          "contribution": 0.04346329724014753,
+          "direction": "increases",
+          "feature": "_LCSCTSN",
+          "value": null
+        },
+        {
+          "absContribution": 0.03270421671773227,
+          "contribution": 0.03270421671773227,
+          "direction": "increases",
+          "feature": "CVDINFR4",
+          "value": null
+        },
+        {
+          "absContribution": 0.018918767112286603,
+          "contribution": 0.018918767112286603,
+          "direction": "increases",
+          "feature": "RMVTETH4",
+          "value": null
+        },
+        {
+          "absContribution": 0.015602003630550995,
+          "contribution": 0.015602003630550995,
+          "direction": "increases",
+          "feature": "PHYSHLTH",
+          "value": 30
+        },
+        {
+          "absContribution": 0.012549919812343227,
+          "contribution": -0.012549919812343227,
+          "direction": "decreases",
+          "feature": "PRIMINS2",
+          "value": 1
+        },
+        {
+          "absContribution": 0.010522884350930295,
+          "contribution": 0.010522884350930295,
+          "direction": "increases",
+          "feature": "DIABETE4",
+          "value": null
+        },
+        {
+          "absContribution": 0.008963914863512532,
+          "contribution": 0.008963914863512532,
+          "direction": "increases",
+          "feature": "LASTDEN4",
+          "value": null
+        },
+        {
+          "absContribution": 0.006057044187761813,
+          "contribution": -0.006057044187761813,
+          "direction": "decreases",
+          "feature": "INCOME3",
+          "value": null
+        },
+        {
+          "absContribution": 0.005452299397971093,
+          "contribution": 0.005452299397971093,
+          "direction": "increases",
+          "feature": "CHCKDNY2",
+          "value": null
+        },
+        {
+          "absContribution": 0.004195425861779357,
+          "contribution": -0.004195425861779357,
+          "direction": "decreases",
+          "feature": "BLIND",
+          "value": 2
+        },
+        {
+          "absContribution": 0.00392466680088811,
+          "contribution": 0.00392466680088811,
+          "direction": "increases",
+          "feature": "MARITAL",
+          "value": 6
+        },
+        {
+          "absContribution": 0.00341306122955068,
+          "contribution": 0.00341306122955068,
+          "direction": "increases",
+          "feature": "DIFFALON",
+          "value": null
+        },
+        {
+          "absContribution": 0.0022993169242869907,
+          "contribution": 0.0022993169242869907,
+          "direction": "increases",
+          "feature": "CNCRTYP2",
+          "value": null
+        },
+        {
+          "absContribution": 0.002035066527417566,
+          "contribution": 0.002035066527417566,
+          "direction": "increases",
+          "feature": "EDUCA",
+          "value": 5
+        },
+        {
+          "absContribution": 0.0020203178823365014,
+          "contribution": -0.0020203178823365014,
+          "direction": "decreases",
+          "feature": "DIFFWALK",
+          "value": null
+        },
+        {
+          "absContribution": 0.0016266210985543027,
+          "contribution": 0.0016266210985543027,
+          "direction": "increases",
+          "feature": "_BMI5",
+          "value": 22.53
+        },
+        {
+          "absContribution": 0.0011855609770719561,
+          "contribution": 0.0011855609770719561,
+          "direction": "increases",
+          "feature": "HADHYST2",
+          "value": null
+        },
+        {
+          "absContribution": 0.001159950911945694,
+          "contribution": -0.001159950911945694,
+          "direction": "decreases",
+          "feature": "_LCSELIG",
+          "value": null
+        },
+        {
+          "absContribution": 0.0011592796590947359,
+          "contribution": 0.0011592796590947359,
+          "direction": "increases",
+          "feature": "DECIDE",
+          "value": null
+        },
+        {
+          "absContribution": 0.00068228826093162,
+          "contribution": -0.00068228826093162,
+          "direction": "decreases",
+          "feature": "PERSDOC3",
+          "value": 3
+        },
+        {
+          "absContribution": 0.0006449043399573927,
+          "contribution": -0.0006449043399573927,
+          "direction": "decreases",
+          "feature": "CNCRAGE",
+          "value": null
+        },
+        {
+          "absContribution": 0.0005191185882256177,
+          "contribution": -0.0005191185882256177,
+          "direction": "decreases",
+          "feature": "_RACE",
+          "value": 1
+        },
+        {
+          "absContribution": 0.0004702077460924031,
+          "contribution": -0.0004702077460924031,
+          "direction": "decreases",
+          "feature": "DEAF",
+          "value": null
+        },
+        {
+          "absContribution": 0.000396313803594039,
+          "contribution": -0.000396313803594039,
+          "direction": "decreases",
+          "feature": "CDDISCU1",
+          "value": null
+        },
+        {
+          "absContribution": 0.00024282505101047878,
+          "contribution": -0.00024282505101047878,
+          "direction": "decreases",
+          "feature": "_ASTHMS1",
+          "value": null
+        },
+        {
+          "absContribution": 0.0001473270671417772,
+          "contribution": 0.0001473270671417772,
+          "direction": "increases",
+          "feature": "DIABAGE4",
+          "value": null
+        },
+        {
+          "absContribution": 0.00011716232231981826,
+          "contribution": 0.00011716232231981826,
+          "direction": "increases",
+          "feature": "HAVARTH4",
+          "value": null
+        },
+        {
+          "absContribution": 7.894844330564687e-05,
+          "contribution": 7.894844330564687e-05,
+          "direction": "increases",
+          "feature": "MENTHLTH",
+          "value": 0
+        },
+        {
+          "absContribution": 3.5304859958719346e-05,
+          "contribution": 3.5304859958719346e-05,
+          "direction": "increases",
+          "feature": "ADDEPEV3",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "_STATE",
+          "value": 1
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CHCOCNC1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CHCCOPD3",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "VETERAN3",
+          "value": 1
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "PREGNANT",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "DIFFDRES",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "FLUSHOT7",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "PNEUVAC4",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "PDIABTS1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "PREDIAB2",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "DIABTYPE",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "INSULIN1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "EYEEXAM1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "DIABEYE1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "DIABEDU1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "FEETSORE",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CNCRDIFF",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CSRVTRT3",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CSRVPAIN",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CIMEMLO1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CDWORRY",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CDHOUS1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "CDSOCIA1",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "SOMALE",
+          "value": 2
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "SOFEMALE",
+          "value": null
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "_URBSTAT",
+          "value": 1
+        },
+        {
+          "absContribution": 0,
+          "contribution": 0,
+          "direction": "increases",
+          "feature": "_SEX",
+          "value": 1
+        }
+      ],
+      "modelOutput": "probability",
+      "outputValue": 0.5827487111091614,
+      "sumValue": 0.5827486514494861
+    },
+    "label": "Stroke",
+    "prediction": 1,
+    "probability": 0.5827487111091614
+  },
+  "scenarioFeatures": {
+    "ADDEPEV3": null,
+    "BLIND": 2,
+    "CDDISCU1": null,
+    "CDHOUS1": null,
+    "CDSOCIA1": null,
+    "CDWORRY": null,
+    "CHCCOPD3": null,
+    "CHCKDNY2": null,
+    "CHCOCNC1": null,
+    "CIMEMLO1": null,
+    "CNCRAGE": null,
+    "CNCRDIFF": null,
+    "CNCRTYP2": null,
+    "CSRVPAIN": null,
+    "CSRVTRT3": null,
+    "CVDINFR4": null,
+    "DEAF": null,
+    "DECIDE": null,
+    "DIABAGE4": null,
+    "DIABEDU1": null,
+    "DIABETE4": null,
+    "DIABEYE1": null,
+    "DIABTYPE": null,
+    "DIFFALON": null,
+    "DIFFDRES": null,
+    "DIFFWALK": null,
+    "EDUCA": 5,
+    "EMPLOY1": 1,
+    "EYEEXAM1": null,
+    "FEETSORE": null,
+    "FLUSHOT7": null,
+    "GENHLTH": 2,
+    "HADHYST2": null,
+    "HAVARTH4": null,
+    "INCOME3": null,
+    "INSULIN1": null,
+    "LASTDEN4": null,
+    "MARITAL": 6,
+    "MENTHLTH": 0,
+    "PDIABTS1": null,
+    "PERSDOC3": 3,
+    "PHYSHLTH": 30,
+    "PNEUVAC4": null,
+    "PREDIAB2": null,
+    "PREGNANT": null,
+    "PRIMINS2": 1,
+    "RMVTETH4": null,
+    "SOFEMALE": null,
+    "SOMALE": 2,
+    "VETERAN3": 1,
+    "_AGE80": 59,
+    "_ASTHMS1": null,
+    "_BMI5": 22.53,
+    "_LCSCTSN": null,
+    "_LCSELIG": null,
+    "_MICHD": null,
+    "_RACE": 1,
+    "_SEX": 1,
+    "_STATE": 1,
+    "_URBSTAT": 1
+  },
+  "selectedFeatures": [
+    {
+      "key": "BLIND",
+      "label": "BLIND"
+    }
+  ],
+  "timestamp": "2026-06-16T09:49:12Z"
+}
+---

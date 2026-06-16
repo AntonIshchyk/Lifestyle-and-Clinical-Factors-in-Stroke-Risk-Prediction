@@ -6,6 +6,8 @@ from pathlib import Path
 import pandas as pd
 
 DB_PATH = Path(__file__).resolve().parent / "healthcare.db"
+DATASETS_DIR = Path(__file__).resolve().parent / "datasets"
+DATASETS_DIR.mkdir(exist_ok=True)
 
 def _connect():
     con = sqlite3.connect(DB_PATH)
@@ -56,13 +58,15 @@ def register_dataset(name: str, df: pd.DataFrame, label: str | None = None):
             f"Dataset name '{name}' contains invalid characters. Use only letters, digits, underscores, and hyphens."
         )
 
-    table_name = f"dataset__{name}"
+    parquet_path = DATASETS_DIR / f"{name}.parquet"
+    df.to_parquet(parquet_path, index=False, compression="zstd")
+    relative = parquet_path.relative_to(Path(__file__).resolve().parent)
+
     with _connect() as con:
         _ensure_schema(con)
-        df.to_sql(table_name, con, if_exists="replace", index=False)
         con.execute(
             "INSERT OR REPLACE INTO _registry (id, type, label, reference) VALUES (?, 'dataset', ?, ?)",
-            (name, label or name, table_name),
+            (name, label or name, str(relative)),
         )
 
 def load_dataset(name: str) -> pd.DataFrame:
@@ -72,7 +76,8 @@ def load_dataset(name: str) -> pd.DataFrame:
         ).fetchone()
         if not row:
             raise KeyError(f"Dataset '{name}' not found")
-        return pd.read_sql(f'SELECT * FROM "{row["reference"]}"', con)
+        path = Path(__file__).resolve().parent / row["reference"]
+        return pd.read_parquet(path)
 
 def clear_registered_models():
     with _connect() as con:
