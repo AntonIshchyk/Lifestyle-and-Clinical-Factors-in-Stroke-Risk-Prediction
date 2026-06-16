@@ -27,6 +27,7 @@ PREDICTION_LOG_PATH = BASE_DIR / "prediction_log.txt"
 AI_MODULE_DIR = PROJECT_ROOT / "ai_module"
 
 _model_cache: dict[str, object] = {}
+_training_jobs: dict[str, dict[str, object]] = {}
 _shap_cache: dict[str, dict[str, object]] = {}
 _model_cache_lock = threading.Lock()
 _shap_cache_lock = threading.Lock()
