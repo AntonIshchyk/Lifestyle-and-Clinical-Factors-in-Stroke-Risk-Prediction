@@ -81,14 +81,7 @@ function useColumns(): GridColDef[] {
       flex: 1.15,
       minWidth: 155,
       sortable: true,
-      renderCell: ({ value }) => (
-        <Chip
-          label={BALANCING_METHOD_LABELS[value as BalancingMethod]}
-          size="small"
-          variant="outlined"
-          sx={{ borderRadius: 1.5, height: 24 }}
-        />
-      ),
+      renderCell: ({ value }) => <Typography variant="body2">{BALANCING_METHOD_LABELS[value as BalancingMethod]}</Typography>
     },
     {
       field: 'auc',
