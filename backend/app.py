@@ -101,7 +101,7 @@ def _load_shap_background(metadata: dict, feature_columns: list[str], fallback: 
         if col not in background.columns:
             background[col] = np.nan
 
-    return background[feature_columns]
+    return background[feature_columns].astype(np.float64)
 
 
 def _load_shap_explainer(model_id: str, classifier, metadata: dict, feature_columns: list[str], X: pd.DataFrame):
