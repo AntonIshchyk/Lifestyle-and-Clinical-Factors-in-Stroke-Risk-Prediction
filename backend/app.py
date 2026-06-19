@@ -42,7 +42,13 @@ def _load_model(model_id: str):
 
     with _model_cache_lock:
         if model_id not in _model_cache:
-            _model_cache[model_id] = joblib.load(get_model_path(model_id))
+            clf = joblib.load(get_model_path(model_id))
+            if hasattr(clf, "get_booster"):
+                try:
+                    clf.get_booster().set_param({"device": "cpu"})
+                except Exception:
+                    pass
+            _model_cache[model_id] = clf
         return _model_cache[model_id]
 
 def _display(value):
@@ -107,6 +113,12 @@ def _load_shap_explainer(model_id: str, classifier, metadata: dict, feature_colu
             return _shap_cache[model_id]
 
         import shap
+
+        if metadata["algorithm"] == "xgboost":
+            try:
+                classifier.get_booster().set_param({"device": "cpu"})
+            except Exception:
+                pass
 
         if metadata["algorithm"] == "random_forest":
             explainer = shap.TreeExplainer(classifier)
