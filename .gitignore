@@ -55,7 +55,7 @@ cover/
 *.mo
 *.pot
 
-# Django stuff:
+
 *.log
 local_settings.py
 db.sqlite3
@@ -64,8 +64,8 @@ db.sqlite3-journal
 # Flask stuff:
 instance/
 .webassets-cache
-backend/healthcare.db
-ai_module/models/
+ai_module/tuned-models/
+ai_module/balanced_training_cache/
 
 # Scrapy stuff:
 .scrapy

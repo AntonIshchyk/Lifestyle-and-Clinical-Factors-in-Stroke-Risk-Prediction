@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Chip from '@mui/material/Chip'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows'
@@ -10,9 +11,11 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchJson } from '../api'
 import {
   ALGORITHM_LABELS,
+  BALANCING_METHOD_LABELS,
   FEATURE_SET_LABELS,
   UNCERTAINTY_VARIANT_LABELS,
   type Algorithm,
+  type BalancingMethod,
   type FeatureSet,
   type UncertaintyVariant,
 } from '../modelMetadata'
@@ -23,11 +26,14 @@ export type ModelRow = {
   algorithm: Algorithm
   featureSet: FeatureSet
   uncertaintyVariant: UncertaintyVariant
+  balancingMethod: BalancingMethod
   auc: number
   accuracy: number
   f1: number
   precision: number
   recall: number
+  classificationThreshold: number
+  isTuned: boolean
 }
 
 type ModelComparisonProps = {
@@ -36,6 +42,8 @@ type ModelComparisonProps = {
   selectedModelId?: string
   onModelSelect?: (model: ModelRow) => void
 }
+
+const EMPTY_MODELS: ModelRow[] = []
 
 async function fetchModels(): Promise<ModelRow[]> {
   return fetchJson<ModelRow[]>('/api/models')
@@ -66,6 +74,14 @@ function useColumns(): GridColDef[] {
       minWidth: 180,
       sortable: true,
       renderCell: ({ value }) => <Typography variant="body2">{UNCERTAINTY_VARIANT_LABELS[value as UncertaintyVariant]}</Typography>,
+    },
+    {
+      field: 'balancingMethod',
+      headerName: 'Balance',
+      flex: 1.15,
+      minWidth: 155,
+      sortable: true,
+      renderCell: ({ value }) => <Typography variant="body2">{BALANCING_METHOD_LABELS[value as BalancingMethod]}</Typography>
     },
     {
       field: 'auc',
@@ -120,6 +136,88 @@ function useColumns(): GridColDef[] {
   ], [])
 }
 
+function ModelListSection({
+  title,
+  subtitle,
+  rows,
+  columns,
+  loading,
+  selectMode,
+  rowSelectionModel,
+  onSelectionChange,
+  onRowClick,
+}: {
+  title: string
+  subtitle?: string
+  rows: ModelRow[]
+  columns: GridColDef[]
+  loading: boolean
+  selectMode: boolean
+  rowSelectionModel: GridRowSelectionModel
+  onSelectionChange: (rows: ModelRow[], model: GridRowSelectionModel) => void
+  onRowClick: (params: GridRowParams) => void
+}) {
+  return (
+    <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+      <Box
+        sx={{
+          px: 2,
+          py: 1.5,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1.5,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box>
+          <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{title}</Typography>
+          {subtitle && <Typography variant="caption" color="text.secondary">{subtitle}</Typography>}
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+          <Chip label={`${rows.length} model${rows.length === 1 ? '' : 's'}`} size="small" variant="outlined" sx={{ borderRadius: 1 }} />
+        </Box>
+      </Box>
+
+      {rows.length === 0 && !loading ? (
+        <Box sx={{ px: 2, py: 4 }}>
+          <Typography variant="body2" color="text.secondary">No models in this group yet.</Typography>
+        </Box>
+      ) : (
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          loading={loading}
+          density="compact"
+          autoHeight
+          hideFooter
+          checkboxSelection={!selectMode}
+          disableRowSelectionOnClick={!selectMode}
+          disableRowSelectionExcludeModel
+          rowSelectionModel={rowSelectionModel}
+          onRowSelectionModelChange={(model) => onSelectionChange(rows, model)}
+          onRowClick={onRowClick}
+          sx={{
+            border: 0,
+            cursor: 'pointer',
+            '& .MuiDataGrid-columnHeaders': {
+              bgcolor: 'grey.50',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+            },
+            '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700, textAlign: 'left' },
+            '& .MuiDataGrid-row:hover': { bgcolor: 'action.hover' },
+            '& .MuiDataGrid-cell': { py: 0.75 },
+            '& .MuiDataGrid-cellContent': { justifyContent: 'flex-start' },
+          }}
+        />
+      )}
+    </Paper>
+  )
+}
+
 function ModelComparison({
   embedded = false,
   mode = 'compare',
@@ -135,16 +233,17 @@ function ModelComparison({
     staleTime: 30_000,
   })
 
-  const models = query.data ?? []
+  const models = query.data ?? EMPTY_MODELS
+  const normalModels = useMemo(() => models.filter((model) => !model.isTuned), [models])
   const loading = query.isLoading || query.isFetching
   const error = query.isError ? 'Could not load models from the backend.' : ''
-  const columns = useColumns()
   const selectedIds = useMemo(
     () => (selectionModel.type === 'include' ? [...selectionModel.ids].map(String) : []),
     [selectionModel],
   )
   const canCompare = selectedIds.length >= 2
   const selectMode = mode === 'select'
+  const columns = useColumns()
   const rowSelectionModel: GridRowSelectionModel = selectMode
     ? selectedModelId
       ? { type: 'include', ids: new Set([selectedModelId]) }
@@ -164,14 +263,29 @@ function ModelComparison({
     navigate(`/models/${params.row.id}`)
   }
 
+  const handleSectionSelectionChange = (rows: ModelRow[], nextModel: GridRowSelectionModel) => {
+    if (selectMode) return
+    const rowIds = new Set(rows.map((row) => row.id))
+    const nextIds = nextModel.type === 'include' ? new Set([...nextModel.ids].map(String)) : new Set<string>()
+
+    setSelectionModel((current) => {
+      const ids = current.type === 'include' ? new Set([...current.ids].map(String)) : new Set<string>()
+      rowIds.forEach((id) => ids.delete(id))
+      nextIds.forEach((id) => ids.add(id))
+      return { type: 'include', ids }
+    })
+  }
+
   const content = (
-    <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', overflow: 'hidden' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       <Box
         sx={{
           px: 2,
           py: 1.5,
-          borderBottom: '1px solid',
+          border: '1px solid',
           borderColor: 'divider',
+          borderRadius: 3,
+          bgcolor: 'background.paper',
           display: 'flex',
           gap: 1.5,
           alignItems: 'center',
@@ -196,39 +310,22 @@ function ModelComparison({
       </Box>
 
       {error ? (
-        <Box sx={{ px: 2, py: 4 }}>
+        <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'divider', px: 2, py: 4 }}>
           <Typography variant="body2" color="error">{error}</Typography>
-        </Box>
+        </Paper>
       ) : (
-        <DataGrid
-          rows={models}
+        <ModelListSection
+          title="Models"
+          rows={normalModels}
           columns={columns}
           loading={loading}
-          density="compact"
-          autoHeight
-          hideFooter
-          checkboxSelection={!selectMode}
-          disableRowSelectionOnClick={!selectMode}
-          disableRowSelectionExcludeModel
+          selectMode={selectMode}
           rowSelectionModel={rowSelectionModel}
-          onRowSelectionModelChange={selectMode ? undefined : setSelectionModel}
+          onSelectionChange={handleSectionSelectionChange}
           onRowClick={handleRowClick}
-          sx={{
-            border: 0,
-            cursor: 'pointer',
-            '& .MuiDataGrid-columnHeaders': {
-              bgcolor: 'grey.50',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-            },
-            '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700, textAlign: 'left' },
-            '& .MuiDataGrid-row:hover': { bgcolor: 'action.hover' },
-            '& .MuiDataGrid-cell': { py: 0.75 },
-            '& .MuiDataGrid-cellContent': { justifyContent: 'flex-start' },
-          }}
         />
       )}
-    </Paper>
+    </Box>
   )
 
   if (embedded) return content

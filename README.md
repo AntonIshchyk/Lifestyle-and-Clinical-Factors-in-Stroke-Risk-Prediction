@@ -6,30 +6,20 @@
 pip install -r requirements.txt
 ```
 
-2. Run the notebook to generate the datasets and models
-
-Open `ai_module/main.ipynb` in VS Code or Jupyter and run all cells from top to bottom or use:
-
-```bash
-jupyter nbconvert --to script main.ipynb --stdout | python
-```
-
-3. Install frontend dependencies (once)
+2. Install frontend dependencies
 
 ```bash
 cd frontend
 npm install
 ```
 
-The frontend is a Vite + React + TypeScript app; Node.js is only needed for installing and building it.
-
-4. Build the frontend
+3. Build the frontend
 
 ```bash
 npm run build
 ```
 
-5. Run the backend
+4. Run the backend
 
 ```bash
 cd ..
@@ -41,6 +31,7 @@ Open http://localhost:5000/ to confirm the app is running.
 ## Project structure
 
 - `backend/app.py` - Flask server
-- `ai_module/` - dataset preperation and model training
+- `backend/notebook_training.py` - notebook training workflows
+- `ai_module/` - dataset preparation and model training notebooks
 - `frontend/` - React + TypeScript frontend
 - `requirements.txt` - Python dependencies

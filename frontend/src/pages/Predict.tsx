@@ -24,6 +24,7 @@ import Patients, { type PatientSelection, type RegistryItem } from './Patients'
 type PredictionResponse = {
   prediction: number
   probability: number
+  classificationThreshold: number
   label: string
   explanation?: ShapExplanation | null
   explanationError?: string
