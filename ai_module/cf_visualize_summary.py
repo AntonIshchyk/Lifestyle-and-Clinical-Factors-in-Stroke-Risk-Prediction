@@ -29,7 +29,7 @@ LABELS = {
     ("MARIJAN1",          "cessation"):  "Cannabis cessation",
     ("MARIJAN1",          "moderation"): "Cannabis −50% (moderation)",
     ("SSBSUGR2",          "cessation"):  "Sugary drinks cessation",
-    ("SSBFRUT3",          "cessation"):  "Fruit juice cessation",
+    ("SSBFRUT3",          "cessation"):  "Sugary fruit drink cessation",
     ("smoking_composite", "cessation"):  "Smoking quit today",
     ("smoking_composite", "moderation"): "Smoking −50% (moderation)",
 }

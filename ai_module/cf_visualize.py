@@ -37,7 +37,7 @@ LABELS = {
     ("MARIJAN1",           "cessation"):   "Cannabis\n(cessation)",
     ("MARIJAN1",           "moderation"):  "Cannabis −50%\n(moderation)",
     ("SSBSUGR2",           "cessation"):   "Sugary drinks\n(cessation)",
-    ("SSBFRUT3",           "cessation"):   "Fruit juice\n(cessation)",
+    ("SSBFRUT3",           "cessation"):   "Sugary fruit drink\n(cessation)",
     ("smoking_composite",  "cessation"):   "Smoking quit today\n(cessation)",
     ("smoking_composite",  "moderation"):  "Smoking −50%\n(moderation)",
 }
