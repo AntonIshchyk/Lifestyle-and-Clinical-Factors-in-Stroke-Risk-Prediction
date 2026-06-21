@@ -33,6 +33,7 @@ const metricRows: MetricRow[] = [
   { label: 'F1', getValue: (model) => fmt3(model.classificationReport.macro_avg['f1-score']) },
   { label: 'Precision', getValue: (model) => pct(model.classificationReport.macro_avg.precision) },
   { label: 'Recall', getValue: (model) => pct(model.classificationReport.macro_avg.recall) },
+  { label: 'Threshold', getValue: (model) => model.classificationThreshold.toFixed(2) },
 ]
 
 function interpolateTpr(points: RocCurvePoint[], fpr: number) {
