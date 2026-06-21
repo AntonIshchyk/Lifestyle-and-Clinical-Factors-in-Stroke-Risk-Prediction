@@ -133,6 +133,16 @@ function useColumns(): GridColDef[] {
       headerAlign: 'left',
       valueFormatter: (value) => pct(value as number),
     },
+    {
+      field: 'classificationThreshold',
+      headerName: 'Threshold',
+      flex: 0.8,
+      minWidth: 90,
+      sortable: true,
+      align: 'left',
+      headerAlign: 'left',
+      valueFormatter: (value) => (value as number).toFixed(2),
+    },
   ], [])
 }
 

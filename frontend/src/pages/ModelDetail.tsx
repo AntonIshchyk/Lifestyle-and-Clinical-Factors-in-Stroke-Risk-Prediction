@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import Chip from '@mui/material/Chip'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { LineChart } from '@mui/x-charts/LineChart'
@@ -56,7 +57,7 @@ function ClassificationReportTable({ report }: { report: ClassificationReport | 
         <tbody>
           {rows.map((row) => (
             <Box component="tr" key={row.name} sx={{ bgcolor: 'transparent' }}>
-                <Box component="td" sx={{ ...tdSx, fontWeight: 400, color: '#0f172a', whiteSpace: 'nowrap' }}>
+              <Box component="td" sx={{ ...tdSx, fontWeight: 400, color: '#0f172a', whiteSpace: 'nowrap' }}>
                 {row.name}
               </Box>
               <Box component="td" sx={{ ...tdSx, textAlign: 'right', color: 'text.primary' }}>{fmt3(row.precision)}</Box>
@@ -121,7 +122,7 @@ function FeatureImportanceList({ importances }: { importances: FeatureImportance
       {sorted.map((fi, idx) => (
         <Box key={fi.feature} sx={{ display: 'grid', gridTemplateColumns: '28px 1fr 120px 48px', alignItems: 'center', gap: 1, py: 0.6, borderBottom: '1px solid', borderColor: 'divider', '&:last-child': { borderBottom: 0 } }}>
           <Typography variant="caption" color="text.disabled" sx={{ textAlign: 'right' }}>{idx + 1}</Typography>
-          <Typography variant="body2" sx={{ fontFamily: 'monospace', }}>{fi.feature}</Typography>
+          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>{fi.feature}</Typography>
           <Box sx={{ borderRadius: 1, height: 6, overflow: 'hidden' }}>
             <Box sx={{ height: '100%', width: barWidth(fi.importance), bgcolor: 'primary.main', borderRadius: 1 }} />
           </Box>
@@ -147,20 +148,39 @@ function ModelDetail() {
 
   const model = query.data ?? null
   const rocPoints = useMemo(() => toRocPoints(model?.rocCurve), [model?.rocCurve])
-  const modelConfusionTotal = model
-    ? confusionTotal(model.confusionMatrix)
-    : null
+  const modelConfusionTotal = model ? confusionTotal(model.confusionMatrix) : null
 
   return (
     <main className="flex min-h-0 flex-1 flex-col px-4 py-4 sm:px-6 lg:px-8">
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         <Box>
-          <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/models')} size="small" sx={{ mb: 1.5, color: 'text.secondary' }}>
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/models')}
+            size="small"
+            sx={{ mb: 1.5, color: 'text.secondary' }}
+          >
             All models
           </Button>
           <Typography variant="h5" sx={{ fontWeight: 700 }}>
             {model ? modelLabel(model) : `Model details${id ? `: ${id}` : ''}`}
           </Typography>
+          {model && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.75, flexWrap: 'wrap' }}>
+              <Chip
+                label={`Threshold: ${model.classificationThreshold.toFixed(2)}`}
+                size="small"
+                variant="outlined"
+                sx={{ borderRadius: 1 }}
+              />
+              <Chip
+                label={`AUC-ROC: ${fmt3(model.auc)}`}
+                size="small"
+                variant="outlined"
+                sx={{ borderRadius: 1 }}
+              />
+            </Box>
+          )}
           {query.isError   && <Typography variant="body2" color="error"          sx={{ mt: 1 }}>Could not load model details from the backend.</Typography>}
           {query.isLoading && <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>Loading model details...</Typography>}
         </Box>
@@ -169,7 +189,7 @@ function ModelDetail() {
           <SectionCard title="Classification report">
             <ClassificationReportTable report={model?.classificationReport ?? null} />
           </SectionCard>
-          <SectionCard title={`Confusion matrix (${modelConfusionTotal ?? '-'})`}>
+          <SectionCard title={`Confusion matrix — threshold ${model?.classificationThreshold.toFixed(2) ?? '?'} (${modelConfusionTotal?.toLocaleString() ?? '-'} total)`}>
             <ConfusionMatrixGrid cm={model?.confusionMatrix ?? null} />
           </SectionCard>
         </Box>
